@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ledger</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  --bg: #0f1116;
+  --bg-elev: #171a21;
+  --surface: #1c1f28;
+  --surface-hover: #232732;
+  --border: #2a2e39;
+  --border-soft: #20232c;
+  --text: #edeef3;
+  --text-dim: #8b90a0;
+  --text-faint: #565b6a;
+  --profit: #4fae7c;
+  --profit-soft: rgba(79,174,124,0.14);
+  --loss: #c75c4f;
+  --loss-soft: rgba(199,92,79,0.14);
+  --accent: #d9a441;
+  --accent-soft: rgba(217,164,65,0.16);
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: radial-gradient(circle at 50% 0%, #1a1d25 0%, #0a0b0e 70%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 12px;
+}
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.display { font-family: var(--font-display); }
+.pnl-pos { color: var(--profit); }
+.pnl-neg { color: var(--loss); }
+.pnl-zero { color: var(--text-dim); }
+
+#app-root {
+  background: var(--bg);
+  height: 700px;
+  max-height: 90vh;
+  width: 100%;
+  max-width: 420px;
+  border-radius: 26px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.45);
+}
+
+.topbar {
+  flex: 0 0 auto;
+  padding: 18px 18px 12px;
+  background: linear-gradient(180deg, var(--bg-elev), var(--bg));
+  border-bottom: 1px solid var(--border-soft);
+}
+.screen {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 16px 90px;
+}
+.screen::-webkit-scrollbar { width: 0; }
+.bottomnav {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 64px;
+  background: rgba(23,26,33,0.92);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 30;
+}
+.nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  color: var(--text-faint);
+  font-size: 10px; font-weight: 600;
+  cursor: pointer; background: none; border: none;
+  padding: 6px 10px; border-radius: 10px;
+  font-family: var(--font-body);
+  transition: color 120ms ease;
+}
+.nav-item.active { color: var(--accent); }
+.nav-item svg { width: 18px; height: 18px; }
+.fab {
+  position: absolute;
+  right: 18px;
+  bottom: 82px;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #14161c;
+  display: flex; align-items: center; justify-content: center;
+  border: none;
+  box-shadow: 0 8px 20px rgba(217,164,65,0.35);
+  cursor: pointer;
+  z-index: 25;
+  transition: transform 120ms ease;
+}
+.fab:active { transform: scale(0.92); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.hero-card {
+  background: linear-gradient(155deg, #1c1f28 0%, #171a21 100%);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px;
+}
+.chip {
+  font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim);
+  cursor: pointer; white-space: nowrap; font-family: var(--font-body);
+}
+.chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.btn {
+  font-family: var(--font-body); font-weight: 600; font-size: 13px;
+  border-radius: 10px; padding: 10px 16px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background 120ms ease, transform 60ms ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #14161c; }
+.btn-ghost { background: transparent; border-color: transparent; padding: 6px; }
+.btn-ghost:hover { background: var(--surface-hover); }
+.seg-btn {
+  flex: 1; text-align: center; padding: 9px 0; font-family: var(--font-mono);
+  font-weight: 600; font-size: 12px; letter-spacing: 0.04em; border-radius: 8px;
+  cursor: pointer; border: 1px solid transparent; color: var(--text-dim);
+}
+.seg-long.active { background: var(--profit-soft); color: var(--profit); border-color: var(--profit); }
+.seg-short.active { background: var(--loss-soft); color: var(--loss); border-color: var(--loss); }
+.field-input {
+  width: 100%; background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 9px; padding: 10px 12px; color: var(--text);
+  font-family: var(--font-mono); font-size: 14px; outline: none;
+}
+.field-input:focus { border-color: var(--accent); }
+.field-label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-faint); font-weight: 600; margin-bottom: 5px; display: block;
+}
+.stat-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 600; }
+
+.sheet-backdrop {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.55);
+  z-index: 40; opacity: 0; pointer-events: none; transition: opacity 200ms ease;
+}
+.sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--bg-elev); border-top: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  max-height: 88%;
+  transform: translateY(100%);
+  transition: transform 260ms cubic-bezier(.32,.72,0,1);
+  z-index: 41;
+  display: flex; flex-direction: column;
+}
+.sheet.open { transform: translateY(0); }
+.sheet-handle { width: 36px; height: 4px; border-radius: 3px; background: var(--border); margin: 10px auto 4px; }
+.sheet-body { overflow-y: auto; padding: 8px 18px 22px; }
+
+.trade-card { padding: 12px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.heat-cell { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--border-soft); }
+.risk-track { height: 6px; background: var(--bg-elev); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-soft); }
+.risk-fill { height: 100%; transition: width 300ms ease; }
+.search-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+.search-bar input { background: transparent; border: none; outline: none; color: var(--text); font-family: var(--font-mono); font-size: 13px; flex: 1; }
+</style>
+</head>
+<body>
+<div id="app-root"></div>
+
+<script>
+/* ---------- icon helpers (inline SVG, no deps) ---------- */
+const ICONS = {
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 22V12h6v10"/></svg>',
+  rows: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="6" rx="1"/><rect x="3" y="15" width="18" height="6" rx="1"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>',
+  settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg>',
+  down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10M17 7v10H7"/></svg>',
+};
+
+/* ---------- helpers ---------- */
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmtMoney = (n) => {
+  const v = Number(n) || 0;
+  const sign = v < 0 ? "-" : v > 0 ? "+" : "";
+  return `${sign}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+const pnlClass = (n) => (n > 0 ? "pnl-pos" : n < 0 ? "pnl-neg" : "pnl-zero");
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function computePnl(t) {
+  if (t.exitPrice === null || t.exitPrice === undefined || t.exitPrice === "") return null;
+  const entry = Number(t.entryPrice), exit = Number(t.exitPrice), qty = Number(t.qty), fees = Number(t.fees) || 0;
+  const gross = t.side === "long" ? (exit - entry) * qty : (entry - exit) * qty;
+  return gross - fees;
+}
+
+/* ---------- state ---------- */
+const state = {
+  trades: [],
+  dailyLimit: "",
+  loaded: false,
+  tab: "home",
+  sheetOpen: false,
+  editingId: null,
+  closingId: null,
+  search: "",
+  filter: "all",
+  saveError: false,
+};
+
+/* ---------- storage ---------- */
+async function loadData() {
+  try {
+    const t = await window.storage.get("journal_html:trades");
+    if (t && t.value) state.trades = JSON.parse(t.value);
+  } catch (e) {}
+  try {
+    const s = await window.storage.get("journal_html:settings");
+    if (s && s.value) {
+      const parsed = JSON.parse(s.value);
+      if (parsed.dailyLimit) state.dailyLimit = parsed.dailyLimit;
+    }
+  } catch (e) {}
+  state.loaded = true;
+  render();
+}
+async function persistTrades(next) {
+  state.trades = next;
+  try {
+    const res = await window.storage.set("journal_html:trades", JSON.stringify(next));
+    state.saveError = !res;
+  } catch (e) { state.saveError = true; }
+  render();
+}
+async function persistSettings(limit) {
+  state.dailyLimit = limit;
+  try { await window.storage.set("journal_html:settings", JSON.stringify({ dailyLimit: limit })); } catch (e) {}
+}
+
+/* ---------- derived data ---------- */
+function getDerived() {
+  const enriched = state.trades.map((t) => ({ ...t, pnl: computePnl(t) }));
+  const closed = enriched.filter((t) => t.pnl !== null);
+  const open = enriched.filter((t) => t.pnl === null);
+  const dailyMap = {};
+  closed.forEach((t) => { dailyMap[t.date] = (dailyMap[t.date] || 0) + t.pnl; });
+  const today = todayISO();
+  const todayPnl = dailyMap[today] || 0;
+  const totalPnl = closed.reduce((s, t) => s + t.pnl, 0);
+  const wins = closed.filter((t) => t.pnl > 0).length;
+  const winRate = closed.length ? (wins / closed.length) * 100 : 0;
+  const limitNum = Number(state.dailyLimit) || 0;
+  const limitPct = limitNum > 0 ? Math.min(100, (Math.abs(Math.min(0, todayPnl)) / limitNum) * 100) : 0;
+  const limitBreached = limitNum > 0 && todayPnl <= -limitNum;
+
+  const sortedClosed = [...closed].sort((a, b) => (a.date + a.id > b.date + b.id ? 1 : -1));
+  let cum = 0;
+  const equityData = sortedClosed.map((t) => { cum += t.pnl; return { date: t.date, symbol: t.symbol, equity: cum }; });
+
+  const days = []; const base = new Date(); base.setHours(0, 0, 0, 0);
+  for (let i = 55; i >= 0; i--) {
+    const d = new Date(base); d.setDate(d.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    days.push({ iso, val: dailyMap[iso] || 0, weekday: d.getDay() });
+  }
+  const padded = Array(days[0].weekday).fill(null).concat(days);
+  const weeks = [];
+  for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7));
+  const maxAbsDay = Math.max(1, ...padded.filter(Boolean).map((d) => Math.abs(d.val)));
+
+  let filteredTrades = [...enriched].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  if (state.filter === "open") filteredTrades = filteredTrades.filter((t) => t.pnl === null);
+  if (state.filter === "long") filteredTrades = filteredTrades.filter((t) => t.side === "long");
+  if (state.filter === "short") filteredTrades = filteredTrades.filter((t) => t.side === "short");
+  if (state.search.trim()) {
+    const q = state.search.trim().toUpperCase();
+    filteredTrades = filteredTrades.filter((t) => t.symbol.toUpperCase().includes(q));
+  }
+
+  return { enriched, closed, open, dailyMap, today, todayPnl, totalPnl, wins, winRate, limitNum, limitPct, limitBreached, equityData, weeks, maxAbsDay, filteredTrades };
+}
+
+/* ---------- render pieces ---------- */
+function heatmapHTML(weeks, maxAbsDay) {
+  return `<div style="display:flex;gap:3px;justify-content:space-between;">` +
+    weeks.map((week) => `<div style="display:flex;flex-direction:column;gap:3px;">` +
+      week.map((d) => {
+        if (!d) return `<div style="width:11px;height:11px;"></div>`;
+        const intensity = d.val === 0 ? 0 : Math.max(0.2, Math.abs(d.val) / maxAbsDay);
+        const color = d.val > 0 ? "var(--profit)" : d.val < 0 ? "var(--loss)" : "var(--bg-elev)";
+        const opacity = d.val === 0 ? 1 : intensity + 0.25;
+        return `<div class="heat-cell" title="${d.iso}: ${fmtMoney(d.val)}" style="background:${color};opacity:${opacity};"></div>`;
+      }).join("") + `</div>`
+    ).join("") + `</div>`;
+}
+
+function equitySVG(equityData) {
+  if (equityData.length < 2) {
+    return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:12px;">Log 2+ closed trades to see this</div>`;
+  }
+  const w = 340, h = 150, pad = 10;
+  const values = equityData.map((d) => d.equity);
+  const min = Math.min(0, ...values), max = Math.max(0, ...values);
+  const range = (max - min) || 1;
+  const stepX = (w - pad * 2) / (equityData.length - 1);
+  const pts = equityData.map((d, i) => {
+    const x = pad + i * stepX;
+    const y = pad + (h - pad * 2) * (1 - (d.equity - min) / range);
+    return [x, y];
+  });
+  const zeroY = pad + (h - pad * 2) * (1 - (0 - min) / range);
+  const line = pts.map((p) => p.join(",")).join(" ");
+  const areaPts = `${pad},${zeroY} ` + line + ` ${pad + (equityData.length - 1) * stepX},${zeroY}`;
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:100%;">
+    <defs><linearGradient id="eqgrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d9a441" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#d9a441" stop-opacity="0"/>
+    </linearGradient></defs>
+    <line x1="${pad}" y1="${zeroY}" x2="${w - pad}" y2="${zeroY}" stroke="#3a3f4d" stroke-width="1"/>
+    <polygon points="${areaPts}" fill="url(#eqgrad)"/>
+    <polyline points="${line}" fill="none" stroke="#d9a441" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function tradeCardHTML(t) {
+  const arrow = t.side === "long" ? ICONS.up : ICONS.down;
+  const bg = t.side === "long" ? "var(--profit-soft)" : "var(--loss-soft)";
+  const iconColor = t.side === "long" ? "var(--profit)" : "var(--loss)";
+  const isClosing = state.closingId === t.id;
+  return `<div class="card trade-card">
+    <div style="width:34px;height:34px;border-radius:10px;flex-shrink:0;background:${bg};display:flex;align-items:center;justify-content:center;color:${iconColor};">
+      <span style="width:16px;height:16px;display:inline-block;">${arrow}</span>
+    </div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="mono" style="font-weight:600;font-size:14px;">${esc(t.symbol)}</span>
+        <span class="mono" style="font-size:11px;color:var(--text-faint);">${esc(t.qty)} sh</span>
+      </div>
+      <div class="mono" style="font-size:11px;color:var(--text-faint);margin-top:1px;">
+        ${t.date} · ${Number(t.entryPrice).toFixed(2)} → ${t.exitPrice === null ? "open" : Number(t.exitPrice).toFixed(2)}
+      </div>
+      ${isClosing ? `<div style="display:flex;gap:6px;margin-top:6px;">
+        <input id="close-input-${t.id}" type="number" step="any" placeholder="exit price" class="field-input" style="padding:6px 8px;font-size:12px;">
+        <button class="btn btn-ghost" data-action="confirm-close" data-id="${t.id}" style="color:var(--profit);">${ICONS.check}</button>
+        <button class="btn btn-ghost" data-action="cancel-close" style="color:var(--text-faint);">${ICONS.x}</button>
+      </div>` : ""}
+    </div>
+    <div style="text-align:right;flex-shrink:0;">
+      <div class="mono ${pnlClass(t.pnl || 0)}" style="font-weight:700;font-size:13.5px;">${t.pnl === null ? "—" : fmtMoney(t.pnl)}</div>
+      <div style="display:flex;gap:2px;margin-top:4px;justify-content:flex-end;">
+        ${t.exitPrice === null && !isClosing ? `<button class="btn btn-ghost" data-action="start-close" data-id="${t.id}" style="padding:3px 6px;font-size:10.5px;">close</button>` : ""}
+        <button class="btn btn-ghost" data-action="edit" data-id="${t.id}" style="color:var(--text-faint);">${ICONS.pencil}</button>
+        <button class="btn btn-ghost" data-action="delete" data-id="${t.id}" style="color:var(--text-faint);">${ICONS.trash}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderTopbar(d) {
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="display" style="font-size:19px;font-weight:700;">Ledger</div>
+        <div class="mono" style="font-size:10.5px;color:var(--text-faint);">${new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="stat-label">Today</div>
+        <div class="mono ${pnlClass(d.todayPnl)}" style="font-weight:700;font-size:15px;">${fmtMoney(d.todayPnl)}</div>
+      </div>
+    </div>
+    ${state.saveError ? `<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--loss);margin-top:6px;"><span style="width:11px;height:11px;display:inline-block;">${ICONS.alert}</span> couldn't save changes</div>` : ""}
+  `;
+}
+
+function renderHome(d) {
+  const recent = [...d.enriched].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 4);
+  return `
+    <div class="hero-card" style="margin-bottom:14px;">
+      <div class="stat-label">Total P&L</div>
+      <div class="mono ${pnlClass(d.totalPnl)}" style="font-size:32px;font-weight:700;margin-top:4px;letter-spacing:-0.01em;">${fmtMoney(d.totalPnl)}</div>
+      <div style="display:flex;gap:18px;margin-top:14px;">
+        <div><div class="stat-label">% Win rate</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.closed.length ? d.winRate.toFixed(1) + "%" : "—"}</div></div>
+        <div><div class="stat-label">Trades</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.closed.length}</div></div>
+        <div><div class="stat-label">Open</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.open.length}</div></div>
+      </div>
+    </div>
+    ${d.limitNum > 0 ? `<div class="card" style="padding:12px 14px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span class="stat-label">Daily loss limit</span>
+        ${d.limitBreached ? `<span style="font-size:10.5px;font-weight:700;color:var(--loss);display:flex;align-items:center;gap:3px;"><span style="width:11px;height:11px;">${ICONS.alert}</span> hit</span>` : ""}
+      </div>
+      <div class="risk-track"><div class="risk-fill" style="width:${d.limitPct}%;background:${d.limitBreached ? "var(--loss)" : d.limitPct > 70 ? "var(--accent)" : "var(--profit)"};"></div></div>
+      <div class="mono" style="font-size:10.5px;color:var(--text-faint);margin-top:5px;">${fmtMoney(Math.min(0, d.todayPnl))} of -$${d.limitNum}</div>
+    </div>` : ""}
+    <div class="card" style="padding:14px;margin-bottom:14px;">
+      <div class="stat-label" style="margin-bottom:10px;">Last 8 weeks</div>
+      ${heatmapHTML(d.weeks, d.maxAbsDay)}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span class="stat-label">Recent trades</span>
+      <button class="btn btn-ghost" data-action="goto-trades" style="padding:3px 6px;font-size:11px;color:var(--accent);">see all</button>
+    </div>
+    ${recent.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-faint);font-size:12.5px;">No trades logged yet</div>` : recent.map(tradeCardHTML).join("")}
+  `;
+}
+
+function renderTrades(d) {
+  const filters = [["all", "All"], ["open", "Open"], ["long", "Long"], ["short", "Short"]];
+  return `
+    <div class="search-bar">
+      <span style="width:13px;height:13px;color:#565b6a;display:inline-block;">${ICONS.search}</span>
+      <input id="search-input" placeholder="Search symbol…" value="${esc(state.search)}">
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;">
+      ${filters.map(([k, label]) => `<div class="chip ${state.filter === k ? "active" : ""}" data-action="filter" data-filter="${k}">${label}</div>`).join("")}
+    </div>
+    ${d.filteredTrades.length === 0 ? `<div class="card" style="padding:24px;text-align:center;color:var(--text-faint);font-size:12.5px;">No trades match</div>` : d.filteredTrades.map(tradeCardHTML).join("")}
+  `;
+}
+
+function renderStats(d) {
+  const avgWin = d.wins ? d.closed.filter(t => t.pnl > 0).reduce((s, t) => s + t.pnl, 0) / d.wins : 0;
+  const lossCount = d.closed.length - d.wins;
+  const avgLoss = lossCount ? d.closed.filter(t => t.pnl < 0).reduce((s, t) => s + t.pnl, 0) / lossCount : 0;
+  return `
+    <div class="card" style="padding:14px;margin-bottom:14px;">
+      <span class="stat-label">Equity curve</span>
+      <div style="height:160px;margin-top:8px;">${equitySVG(d.equityData)}</div>
+    </div>
+    <div class="card" style="padding:14px;margin-bottom:14px;">
+      <div class="stat-label" style="margin-bottom:10px;">Daily P&L · last 8 weeks</div>
+      ${heatmapHTML(d.weeks, d.maxAbsDay)}
+    </div>
+    <div class="card" style="padding:14px;">
+      <div class="stat-label" style="margin-bottom:10px;">Breakdown</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><div class="stat-label">Wins</div><div class="mono pnl-pos" style="font-size:16px;font-weight:700;">${d.wins}</div></div>
+        <div><div class="stat-label">Losses</div><div class="mono pnl-neg" style="font-size:16px;font-weight:700;">${lossCount}</div></div>
+        <div><div class="stat-label">Avg win</div><div class="mono pnl-pos" style="font-size:14px;">${fmtMoney(avgWin)}</div></div>
+        <div><div class="stat-label">Avg loss</div><div class="mono pnl-neg" style="font-size:14px;">${fmtMoney(avgLoss)}</div></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSettings() {
+  return `
+    <div class="card" style="padding:16px;">
+      <div class="stat-label" style="margin-bottom:8px;">Daily loss limit</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+        <span class="mono" style="color:var(--text-faint);">$</span>
+        <input id="limit-input" class="field-input" type="number" min="0" placeholder="e.g. 500" value="${esc(state.dailyLimit)}">
+      </div>
+      <div style="font-size:11.5px;color:var(--text-faint);">A soft cap for reference — shown as a progress bar on Home once your loss today gets close.</div>
+      <div style="margin-top:18px;font-size:11px;color:var(--text-faint);border-top:1px solid var(--border-soft);padding-top:14px;">
+        Data is saved privately to your account and isn't visible to anyone else.
+      </div>
+    </div>
+  `;
+}
+
+function sheetFormHTML(existing) {
+  const t = existing || { symbol: "", side: "long", qty: "", entryPrice: "", exitPrice: "", fees: "", date: todayISO(), notes: "" };
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 14px;">
+      <span class="display" style="font-size:16px;font-weight:700;">${existing ? "Edit Trade" : "Log a Trade"}</span>
+      <button class="btn btn-ghost" data-action="close-sheet" style="color:var(--text-faint);">${ICONS.x}</button>
+    </div>
+    <form id="trade-form">
+      <div style="margin-bottom:10px;">
+        <label class="field-label">Symbol</label>
+        <input id="f-symbol" class="field-input" style="text-transform:uppercase;" placeholder="AAPL" value="${esc(t.symbol)}" required>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="field-label">Side</label>
+        <div style="display:flex;gap:6px;background:var(--bg);padding:3px;border-radius:9px;border:1px solid var(--border);">
+          <div class="seg-btn seg-long ${t.side === "long" ? "active" : ""}" data-action="set-side" data-side="long" id="seg-long">LONG</div>
+          <div class="seg-btn seg-short ${t.side === "short" ? "active" : ""}" data-action="set-side" data-side="short" id="seg-short">SHORT</div>
+        </div>
+        <input type="hidden" id="f-side" value="${t.side}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div><label class="field-label">Qty</label><input id="f-qty" class="field-input" type="number" step="any" min="0" placeholder="100" value="${esc(t.qty)}" required></div>
+        <div><label class="field-label">Date</label><input id="f-date" class="field-input" type="date" value="${esc(t.date)}"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div><label class="field-label">Entry price</label><input id="f-entry" class="field-input" type="number" step="any" min="0" placeholder="0.00" value="${esc(t.entryPrice)}" required></div>
+        <div><label class="field-label">Exit price <span style="opacity:0.6;">(optional)</span></label><input id="f-exit" class="field-input" type="number" step="any" min="0" placeholder="open" value="${t.exitPrice === null ? "" : esc(t.exitPrice)}"></div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="field-label">Fees <span style="opacity:0.6;">(optional)</span></label>
+        <input id="f-fees" class="field-input" type="number" step="any" min="0" placeholder="0.00" value="${esc(t.fees)}">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label class="field-label">Notes</label>
+        <input id="f-notes" class="field-input" placeholder="setup, mistake, reason…" value="${esc(t.notes)}">
+      </div>
+      <button type="submit" class="btn btn-accent" style="width:100%;">
+        <span style="width:14px;height:14px;">${ICONS.plus}</span> ${existing ? "Save changes" : "Add trade"}
+      </button>
+    </form>
+  `;
+}
+
+/* ---------- main render ---------- */
+function render() {
+  const root = document.getElementById("app-root");
+  if (!state.loaded) {
+    root.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;"><div class="mono" style="color:var(--text-faint);font-size:13px;">loading ledger…</div></div>`;
+    return;
+  }
+  const d = getDerived();
+  const screens = { home: renderHome, trades: renderTrades, stats: renderStats, settings: renderSettings };
+  const showFab = state.tab === "home" || state.tab === "trades";
+  const navItems = [["home", "Home", ICONS.home], ["trades", "Trades", ICONS.rows], ["stats", "Stats", ICONS.chart], ["settings", "Settings", ICONS.settings]];
+  const editingTrade = state.editingId ? state.trades.find((t) => t.id === state.editingId) : null;
+
+  root.innerHTML = `
+    <div class="topbar" id="topbar">${renderTopbar(d)}</div>
+    <div class="screen" id="screen">${screens[state.tab](d)}</div>
+    ${showFab ? `<button class="fab" data-action="open-add">${ICONS.plus}</button>` : ""}
+    <div class="bottomnav">
+      ${navItems.map(([k, label, icon]) => `<button class="nav-item ${state.tab === k ? "active" : ""}" data-action="tab" data-tab="${k}">${icon}${label}</button>`).join("")}
+    </div>
+    <div class="sheet-backdrop ${state.sheetOpen ? "open" : ""}" data-action="close-sheet"></div>
+    <div class="sheet ${state.sheetOpen ? "open" : ""}">
+      <div class="sheet-handle"></div>
+      <div class="sheet-body">${sheetFormHTML(editingTrade)}</div>
+    </div>
+  `;
+  attachEvents();
+}
+
+/* ---------- events ---------- */
+function attachEvents() {
+  document.querySelectorAll("[data-action]").forEach((el) => {
+    const action = el.getAttribute("data-action");
+    el.addEventListener("click", (e) => {
+      switch (action) {
+        case "tab": state.tab = el.getAttribute("data-tab"); render(); break;
+        case "goto-trades": state.tab = "trades"; render(); break;
+        case "open-add": state.editingId = null; state.sheetOpen = true; render(); break;
+        case "close-sheet": state.sheetOpen = false; state.editingId = null; render(); break;
+        case "edit": state.editingId = el.getAttribute("data-id"); state.sheetOpen = true; render(); break;
+        case "delete": {
+          const id = el.getAttribute("data-id");
+          persistTrades(state.trades.filter((t) => t.id !== id));
+          break;
+        }
+        case "start-close": state.closingId = el.getAttribute("data-id"); render(); break;
+        case "cancel-close": state.closingId = null; render(); break;
+        case "confirm-close": {
+          const id = el.getAttribute("data-id");
+          const input = document.getElementById("close-input-" + id);
+          const val = input ? input.value : "";
+          if (!val) return;
+          persistTrades(state.trades.map((t) => (t.id === id ? { ...t, exitPrice: val } : t)));
+          state.closingId = null;
+          break;
+        }
+        case "filter": state.filter = el.getAttribute("data-filter"); render(); break;
+        case "set-side": {
+          const side = el.getAttribute("data-side");
+          document.getElementById("f-side").value = side;
+          document.getElementById("seg-long").classList.toggle("active", side === "long");
+          document.getElementById("seg-short").classList.toggle("active", side === "short");
+          break;
+        }
+      }
+    });
+  });
+
+  const searchInput = document.getElementById("search-input");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      state.search = e.target.value;
+      const cursor = e.target.selectionStart;
+      render();
+      const again = document.getElementById("search-input");
+      if (again) { again.focus(); again.setSelectionRange(cursor, cursor); }
+    });
+  }
+
+  const limitInput = document.getElementById("limit-input");
+  if (limitInput) {
+    limitInput.addEventListener("input", (e) => {
+      const cursor = e.target.selectionStart;
+      persistSettings(e.target.value).then(() => {
+        const again = document.getElementById("limit-input");
+        if (again) { again.value = e.target.value; again.focus(); again.setSelectionRange(cursor, cursor); }
+      });
+    });
+  }
+
+  const form = document.getElementById("trade-form");
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const symbol = document.getElementById("f-symbol").value.trim();
+      const qty = document.getElementById("f-qty").value;
+      const entryPrice = document.getElementById("f-entry").value;
+      if (!symbol || !qty || !entryPrice) return;
+      const exitVal = document.getElementById("f-exit").value;
+      const record = {
+        id: state.editingId || uid(),
+        symbol: symbol.toUpperCase(),
+        side: document.getElementById("f-side").value,
+        qty, entryPrice,
+        exitPrice: exitVal === "" ? null : exitVal,
+        fees: document.getElementById("f-fees").value || 0,
+        date: document.getElementById("f-date").value || todayISO(),
+        notes: document.getElementById("f-notes").value || "",
+      };
+      const next = state.editingId
+        ? state.trades.map((t) => (t.id === state.editingId ? record : t))
+        : [record, ...state.trades];
+      state.sheetOpen = false;
+      state.editingId = null;
+      persistTrades(next);
+    });
+  }
+}
+
+/* ---------- boot ---------- */
+loadData();
+</script>
+</body>
+</html>

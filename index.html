@@ -7,33 +7,33 @@
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icon-192.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-<meta name="theme-color" content="#0f1116" />
+<meta name="theme-color" content="#0b0c10" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Ledger" />
 <meta name="mobile-web-app-capable" content="yes" />
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; }
 body {
-  --bg: #0f1116;
-  --bg-elev: #171a21;
-  --surface: #1c1f28;
-  --surface-hover: #232732;
-  --border: #2a2e39;
-  --border-soft: #20232c;
-  --text: #edeef3;
-  --text-dim: #8b90a0;
-  --text-faint: #565b6a;
-  --profit: #4fae7c;
-  --profit-soft: rgba(79,174,124,0.14);
-  --loss: #c75c4f;
-  --loss-soft: rgba(199,92,79,0.14);
-  --accent: #d9a441;
-  --accent-soft: rgba(217,164,65,0.16);
-  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --bg: #0b0c10;
+  --bg-elev: #14161c;
+  --surface: #191c24;
+  --surface-hover: #20242f;
+  --border: #262a35;
+  --border-soft: #1d2029;
+  --text: #f2f0ea;
+  --text-dim: #999eac;
+  --text-faint: #5c6172;
+  --profit: #5fb489;
+  --profit-soft: rgba(95,180,137,0.14);
+  --loss: #c1594b;
+  --loss-soft: rgba(193,89,75,0.14);
+  --accent: #c9a15a;
+  --accent-soft: rgba(201,161,90,0.16);
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
   --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-family: var(--font-body);
@@ -141,7 +141,7 @@ body {
   .home-heat { grid-area: heat; }
   .home-recent { grid-area: recent; }
   .home-heat { margin-top: 0 !important; }
-  .home-hero .mono { font-size: 40px !important; }
+  .home-hero .hero-figure { font-size: 44px !important; }
   .recent-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .recent-grid .trade-card { margin-bottom: 0; }
 
@@ -180,8 +180,16 @@ body {
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 16px 16px 90px;
+  animation: screen-in 220ms ease;
 }
 .screen::-webkit-scrollbar { width: 0; }
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen, .fab.invite, .fab, .sheet, .btn, .risk-fill { animation: none !important; transition: none !important; }
+}
 .bottomnav {
   position: fixed;
   left: 0; right: 0; bottom: 0;
@@ -211,27 +219,63 @@ body {
   bottom: 82px;
   width: 52px; height: 52px;
   border-radius: 50%;
-  background: var(--accent);
+  background: linear-gradient(155deg, #d5ac6c, var(--accent));
   color: #14161c;
   display: flex; align-items: center; justify-content: center;
   border: none;
-  box-shadow: 0 8px 20px rgba(217,164,65,0.35);
+  box-shadow: 0 8px 20px rgba(201,161,90,0.35);
   cursor: pointer;
   z-index: 25;
   transition: transform 120ms ease;
 }
 .fab:active { transform: scale(0.92); }
+@keyframes fab-invite {
+  0%, 100% { box-shadow: 0 8px 20px rgba(217,164,65,0.35); }
+  50% { box-shadow: 0 8px 28px rgba(201,161,90,0.65), 0 0 0 6px rgba(201,161,90,0.12); }
+}
+.fab.invite { animation: fab-invite 2.4s ease-in-out infinite; }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 20px rgba(0,0,0,0.18);
 }
 .hero-card {
-  background: linear-gradient(155deg, #1c1f28 0%, #171a21 100%);
+  position: relative;
+  background: linear-gradient(160deg, #1d212b 0%, #14161c 100%);
   border: 1px solid var(--border);
   border-radius: 18px;
-  padding: 20px;
+  padding: 24px 22px 24px 32px;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 14px 34px rgba(0,0,0,0.32);
+}
+/* Signature: faint ruled ledger-paper lines + the accountant's red margin rule */
+.hero-card::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0, transparent 30px,
+    rgba(242,240,234,0.045) 30px, rgba(242,240,234,0.045) 31px
+  );
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 18%, black 88%, transparent);
+          mask-image: linear-gradient(to bottom, transparent, black 18%, black 88%, transparent);
+  pointer-events: none;
+}
+.hero-card::after {
+  content: "";
+  position: absolute; left: 20px; top: 0; bottom: 0; width: 1px;
+  background: linear-gradient(to bottom, transparent, rgba(193,89,75,0.4) 12%, rgba(193,89,75,0.4) 88%, transparent);
+  pointer-events: none;
+}
+.hero-card > * { position: relative; z-index: 1; }
+.hero-figure {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .chip {
   font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 20px;
@@ -244,12 +288,18 @@ body {
   border-radius: 10px; padding: 10px 16px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  transition: background 120ms ease, transform 60ms ease;
+  transition: background 120ms ease, transform 60ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
+.btn:hover { border-color: #363c4a; }
 .btn:active { transform: scale(0.98); }
-.btn-accent { background: var(--accent); border-color: var(--accent); color: #14161c; }
+.btn-accent {
+  background: linear-gradient(160deg, #d5ac6c, var(--accent));
+  border-color: var(--accent); color: #14161c;
+  box-shadow: 0 4px 14px rgba(201,161,90,0.25);
+}
+.btn-accent:hover { box-shadow: 0 6px 18px rgba(201,161,90,0.35); }
 .btn-ghost { background: transparent; border-color: transparent; padding: 6px; }
-.btn-ghost:hover { background: var(--surface-hover); }
+.btn-ghost:hover { background: var(--surface-hover); border-color: transparent; }
 .seg-btn {
   flex: 1; text-align: center; padding: 9px 0; font-family: var(--font-mono);
   font-weight: 600; font-size: 12px; letter-spacing: 0.04em; border-radius: 8px;
@@ -288,7 +338,8 @@ body {
 .sheet-handle { width: 36px; height: 4px; border-radius: 3px; background: var(--border); margin: 10px auto 4px; }
 .sheet-body { overflow-y: auto; padding: 8px 18px 22px; }
 
-.trade-card { padding: 12px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.trade-card { padding: 12px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 8px; transition: border-color 150ms ease, transform 100ms ease; }
+.trade-card:hover { border-color: #333849; }
 .heat-cell { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--border-soft); }
 .risk-track { height: 6px; background: var(--bg-elev); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-soft); }
 .risk-fill { height: 100%; transition: width 300ms ease; }
@@ -332,6 +383,23 @@ const fmtMoney = (n) => {
   return `${sign}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 const pnlClass = (n) => (n > 0 ? "pnl-pos" : n < 0 ? "pnl-neg" : "pnl-zero");
+
+/* Tasteful count-up: numbers settle into place rather than snapping, gives the ledger a pulse. */
+let prevTotalShown = 0;
+let prevTodayShown = 0;
+function animateCountUp(el, from, to, duration) {
+  if (!el) return;
+  if (Math.abs(from - to) < 0.005) { el.textContent = fmtMoney(to); return; }
+  const start = performance.now();
+  function tick(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = fmtMoney(from + (to - from) * eased);
+    if (t < 1) requestAnimationFrame(tick);
+    else el.textContent = fmtMoney(to);
+  }
+  requestAnimationFrame(tick);
+}
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function computePnl(t) {
@@ -446,21 +514,28 @@ function getDerived() {
 
 /* ---------- render pieces ---------- */
 function heatmapHTML(weeks, maxAbsDay) {
-  return `<div style="display:flex;gap:3px;justify-content:space-between;">` +
+  const dayLabels = ["", "Mon", "", "Wed", "", "Fri", ""];
+  const labelsCol = `<div style="display:flex;flex-direction:column;gap:3px;margin-right:7px;flex-shrink:0;">` +
+    dayLabels.map((l) => `<div style="width:18px;height:11px;font-size:8px;line-height:11px;color:var(--text-faint);font-family:var(--font-mono);">${l}</div>`).join("") +
+    `</div>`;
+  const grid = `<div style="display:flex;gap:3px;justify-content:space-between;flex:1;">` +
     weeks.map((week) => `<div style="display:flex;flex-direction:column;gap:3px;">` +
       week.map((d) => {
         if (!d) return `<div style="width:11px;height:11px;"></div>`;
         const intensity = d.val === 0 ? 0 : Math.max(0.2, Math.abs(d.val) / maxAbsDay);
         const color = d.val > 0 ? "var(--profit)" : d.val < 0 ? "var(--loss)" : "var(--bg-elev)";
         const opacity = d.val === 0 ? 1 : intensity + 0.25;
-        return `<div class="heat-cell" title="${d.iso}: ${fmtMoney(d.val)}" style="background:${color};opacity:${opacity};"></div>`;
+        const isToday = d.iso === todayISO();
+        const ring = isToday ? "box-shadow:0 0 0 1.5px var(--accent);" : "";
+        return `<div class="heat-cell" title="${d.iso}: ${fmtMoney(d.val)}" style="background:${color};opacity:${opacity};${ring}"></div>`;
       }).join("") + `</div>`
     ).join("") + `</div>`;
+  return `<div style="display:flex;align-items:flex-start;">${labelsCol}${grid}</div>`;
 }
 
 function equitySVG(equityData) {
   if (equityData.length < 2) {
-    return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:12px;">Log 2+ entries to see this</div>`;
+    return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:12px;text-align:center;padding:0 20px;">Two entries draw the first line — log another to watch it take shape</div>`;
   }
   const w = 340, h = 150, pad = 10;
   const values = equityData.map((d) => d.equity);
@@ -477,12 +552,12 @@ function equitySVG(equityData) {
   const areaPts = `${pad},${zeroY} ` + line + ` ${pad + (equityData.length - 1) * stepX},${zeroY}`;
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:100%;">
     <defs><linearGradient id="eqgrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#d9a441" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#d9a441" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#c9a15a" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#c9a15a" stop-opacity="0"/>
     </linearGradient></defs>
     <line x1="${pad}" y1="${zeroY}" x2="${w - pad}" y2="${zeroY}" stroke="#3a3f4d" stroke-width="1"/>
     <polygon points="${areaPts}" fill="url(#eqgrad)"/>
-    <polyline points="${line}" fill="none" stroke="#d9a441" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    <polyline points="${line}" fill="none" stroke="#c9a15a" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>`;
 }
 
@@ -512,12 +587,12 @@ function renderTopbar(d) {
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div>
-        <div class="display" style="font-size:19px;font-weight:700;">Ledger</div>
+        <div class="display" style="font-size:20px;font-weight:600;font-style:italic;letter-spacing:-0.01em;">Ledger</div>
         <div class="mono" style="font-size:10.5px;color:var(--text-faint);">${new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
       </div>
       <div style="text-align:right;">
         <div class="stat-label">Today</div>
-        <div class="mono ${pnlClass(d.todayPnl)}" style="font-weight:700;font-size:15px;">${fmtMoney(d.todayPnl)}</div>
+        <div id="today-pnl-el" class="hero-figure ${pnlClass(d.todayPnl)}" style="font-size:17px;">${fmtMoney(d.todayPnl)}</div>
       </div>
     </div>
     ${state.saveError ? `<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--loss);margin-top:6px;"><span style="width:11px;height:11px;display:inline-block;">${ICONS.alert}</span> couldn't save changes</div>` : ""}
@@ -530,7 +605,7 @@ function renderHome(d) {
   return `<div class="home-screen">
     <div class="hero-card home-hero">
       <div class="stat-label">Total P&L</div>
-      <div class="mono ${pnlClass(d.totalPnl)}" style="font-size:32px;font-weight:700;margin-top:4px;letter-spacing:-0.01em;">${fmtMoney(d.totalPnl)}</div>
+      <div id="hero-total-el" class="hero-figure ${pnlClass(d.totalPnl)}" style="font-size:34px;margin-top:6px;">${fmtMoney(d.totalPnl)}</div>
       <div style="display:flex;gap:18px;margin-top:14px;">
         <div><div class="stat-label">% Win rate</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.enriched.length ? d.winRate.toFixed(1) + "%" : "—"}</div></div>
         <div><div class="stat-label">Entries</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.enriched.length}</div></div>
@@ -553,7 +628,7 @@ function renderHome(d) {
         <span class="stat-label">Recent entries</span>
         <button class="btn btn-ghost" data-action="goto-trades" style="padding:3px 6px;font-size:11px;color:var(--accent);">see all</button>
       </div>
-      ${recent.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-faint);font-size:12.5px;">No entries logged yet</div>` : `<div class="recent-grid">${recent.map(tradeCardHTML).join("")}</div>`}
+      ${recent.length === 0 ? `<div class="card" style="padding:28px 20px;text-align:center;"><div style="font-size:13px;color:var(--text-dim);margin-bottom:4px;">The ledger is empty</div><div style="font-size:11.5px;color:var(--text-faint);">Tap + to log today\'s result and start the tally</div></div>` : `<div class="recent-grid">${recent.map(tradeCardHTML).join("")}</div>`}
     </div>
   </div>`;
 }
@@ -570,7 +645,7 @@ function renderTrades(d) {
         ${filters.map(([k, label]) => `<div class="chip ${state.filter === k ? "active" : ""}" data-action="filter" data-filter="${k}">${label}</div>`).join("")}
       </div>
     </div>
-    ${d.filteredTrades.length === 0 ? `<div class="card" style="padding:24px;text-align:center;color:var(--text-faint);font-size:12.5px;margin-top:12px;">No entries match</div>` : `<div class="trades-grid">${d.filteredTrades.map(tradeCardHTML).join("")}</div>`}
+    ${d.filteredTrades.length === 0 ? `<div class="card" style="padding:28px;text-align:center;margin-top:12px;"><div style="font-size:13px;color:var(--text-dim);">Nothing here</div><div style="font-size:11.5px;color:var(--text-faint);margin-top:4px;">Try a different filter or search term</div></div>` : `<div class="trades-grid">${d.filteredTrades.map(tradeCardHTML).join("")}</div>`}
   `;
 }
 
@@ -686,7 +761,7 @@ function render() {
     <div class="app-shell">
       <div class="bottomnav">
         <div class="sidebar-header">
-          <div class="display" style="font-size:18px;font-weight:700;">Ledger</div>
+          <div class="display" style="font-size:19px;font-weight:600;font-style:italic;letter-spacing:-0.01em;">Ledger</div>
           <div class="mono" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Trading journal</div>
         </div>
         <button class="btn btn-accent sidebar-add-btn" data-action="open-add">
@@ -699,7 +774,7 @@ function render() {
         <div class="screen" id="screen">${screens[state.tab](d)}</div>
       </div>
     </div>
-    ${showFab ? `<button class="fab" data-action="open-add">${ICONS.plus}</button>` : ""}
+    ${showFab ? `<button class="fab ${state.trades.length === 0 ? "invite" : ""}" data-action="open-add">${ICONS.plus}</button>` : ""}
     <div class="sheet-backdrop ${state.sheetOpen ? "open" : ""}" data-action="close-sheet"></div>
     <div class="sheet ${state.sheetOpen ? "open" : ""}">
       <div class="sheet-handle"></div>
@@ -709,6 +784,10 @@ function render() {
   const installBtn = document.getElementById("install-btn");
   if (installBtn && deferredInstallPrompt) installBtn.style.display = "inline-flex";
   attachEvents();
+  animateCountUp(document.getElementById("hero-total-el"), prevTotalShown, d.totalPnl, 550);
+  animateCountUp(document.getElementById("today-pnl-el"), prevTodayShown, d.todayPnl, 550);
+  prevTotalShown = d.totalPnl;
+  prevTodayShown = d.todayPnl;
   if (state.sheetOpen) {
     const amountInput = document.getElementById("f-amount");
     if (amountInput) setTimeout(() => amountInput.focus(), 260);

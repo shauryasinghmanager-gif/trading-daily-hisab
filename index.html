@@ -2,8 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Ledger</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="theme-color" content="#0f1116" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Ledger" />
+<meta name="mobile-web-app-capable" content="yes" />
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
 
@@ -56,6 +64,109 @@ body {
   flex-direction: column;
   border: 1px solid var(--border);
   box-shadow: 0 30px 60px rgba(0,0,0,0.45);
+}
+.app-shell { display: flex; flex-direction: column; height: 100%; width: 100%; position: relative; }
+.app-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.sidebar-header { display: none; }
+.sidebar-add-btn { display: none; }
+
+/* Full-screen, edge-to-edge on phones and when installed as an app */
+@media (max-width: 480px), (display-mode: standalone), (display-mode: fullscreen) {
+  body { padding: 0; align-items: stretch; }
+  #app-root {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    max-width: none;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+  .topbar { padding-top: calc(18px + env(safe-area-inset-top)); }
+  .bottomnav { padding-bottom: env(safe-area-inset-bottom); height: calc(64px + env(safe-area-inset-bottom)); }
+  .fab { bottom: calc(82px + env(safe-area-inset-bottom)); }
+  .screen { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+}
+
+/* Desktop / large screens: real app shell — left sidebar, wide content, no phone card */
+@media (min-width: 860px) {
+  body { padding: 0; align-items: stretch; }
+  #app-root {
+    width: 100%;
+    height: 100vh;
+    max-height: none;
+    max-width: none;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+  .app-shell { flex-direction: row; }
+  .bottomnav {
+    position: static;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 240px;
+    height: 100%;
+    padding: 22px 14px;
+    gap: 3px;
+    background: var(--bg-elev);
+    border-top: none;
+    border-right: 1px solid var(--border-soft);
+    backdrop-filter: none;
+  }
+  .sidebar-header { display: block; padding: 4px 10px 26px; }
+  .nav-item {
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 100%;
+    font-size: 13.5px;
+    padding: 10px 12px;
+    gap: 11px;
+    border-radius: 10px;
+  }
+  .nav-item svg { width: 17px; height: 17px; }
+  .nav-item.active { background: var(--accent-soft); }
+  .sidebar-add-btn { display: flex; margin: 4px 10px 18px; }
+  .app-main { max-width: none; }
+  .topbar { padding: 22px 34px 16px; }
+  .screen { padding: 0 34px 48px; max-width: 1100px; }
+  .fab { display: none !important; }
+
+  .home-screen, .stats-screen { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 18px; align-items: start; }
+  .home-screen { grid-template-areas: "hero heat" "risk heat" "recent recent"; }
+  .home-hero { grid-area: hero; }
+  .home-risk { grid-area: risk; }
+  .home-heat { grid-area: heat; }
+  .home-recent { grid-area: recent; }
+  .home-heat { margin-top: 0 !important; }
+  .home-hero .mono { font-size: 40px !important; }
+  .recent-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .recent-grid .trade-card { margin-bottom: 0; }
+
+  .stats-screen { grid-template-areas: "equity breakdown" "heat breakdown"; }
+  .stats-equity { grid-area: equity; }
+  .stats-heat { grid-area: heat; }
+  .stats-breakdown { grid-area: breakdown; }
+
+  .trades-toolbar { display: flex; align-items: center; gap: 12px; }
+  .trades-toolbar .search-bar { flex: 1; margin-bottom: 0; }
+  .trades-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .trades-grid .trade-card { margin-bottom: 0; }
+
+  .settings-screen { max-width: 460px; }
+
+  .sheet-backdrop { background: rgba(0,0,0,0.6); }
+  .sheet {
+    left: 50%; right: auto; bottom: auto; top: 50%;
+    transform: translate(-50%, -46%);
+    width: 420px; max-height: 84vh;
+    border-radius: 18px;
+    opacity: 0;
+    transition: transform 220ms ease, opacity 220ms ease;
+  }
+  .sheet.open { transform: translate(-50%, -50%); opacity: 1; }
+  .sheet-handle { display: none; }
 }
 
 .topbar {
@@ -237,16 +348,16 @@ const state = {
   saveError: false,
 };
 
-/* ---------- storage ---------- */
+/* ---------- storage (localStorage — this app runs standalone, installed to your device) ---------- */
 async function loadData() {
   try {
-    const t = await window.storage.get("journal_html:trades");
-    if (t && t.value) state.trades = JSON.parse(t.value);
+    const t = localStorage.getItem("journal_html:trades");
+    if (t) state.trades = JSON.parse(t);
   } catch (e) {}
   try {
-    const s = await window.storage.get("journal_html:settings");
-    if (s && s.value) {
-      const parsed = JSON.parse(s.value);
+    const s = localStorage.getItem("journal_html:settings");
+    if (s) {
+      const parsed = JSON.parse(s);
       if (parsed.dailyLimit) state.dailyLimit = parsed.dailyLimit;
     }
   } catch (e) {}
@@ -256,14 +367,14 @@ async function loadData() {
 async function persistTrades(next) {
   state.trades = next;
   try {
-    const res = await window.storage.set("journal_html:trades", JSON.stringify(next));
-    state.saveError = !res;
+    localStorage.setItem("journal_html:trades", JSON.stringify(next));
+    state.saveError = false;
   } catch (e) { state.saveError = true; }
   render();
 }
 async function persistSettings(limit) {
   state.dailyLimit = limit;
-  try { await window.storage.set("journal_html:settings", JSON.stringify({ dailyLimit: limit })); } catch (e) {}
+  try { localStorage.setItem("journal_html:settings", JSON.stringify({ dailyLimit: limit })); } catch (e) {}
 }
 
 /* ---------- derived data ---------- */
@@ -403,8 +514,8 @@ function renderTopbar(d) {
 
 function renderHome(d) {
   const recent = [...d.enriched].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 4);
-  return `
-    <div class="hero-card" style="margin-bottom:14px;">
+  return `<div class="home-screen">
+    <div class="hero-card home-hero">
       <div class="stat-label">Total P&L</div>
       <div class="mono ${pnlClass(d.totalPnl)}" style="font-size:32px;font-weight:700;margin-top:4px;letter-spacing:-0.01em;">${fmtMoney(d.totalPnl)}</div>
       <div style="display:flex;gap:18px;margin-top:14px;">
@@ -413,37 +524,41 @@ function renderHome(d) {
         <div><div class="stat-label">Open</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.open.length}</div></div>
       </div>
     </div>
-    ${d.limitNum > 0 ? `<div class="card" style="padding:12px 14px;margin-bottom:14px;">
+    ${d.limitNum > 0 ? `<div class="card home-risk" style="padding:12px 14px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span class="stat-label">Daily loss limit</span>
         ${d.limitBreached ? `<span style="font-size:10.5px;font-weight:700;color:var(--loss);display:flex;align-items:center;gap:3px;"><span style="width:11px;height:11px;">${ICONS.alert}</span> hit</span>` : ""}
       </div>
       <div class="risk-track"><div class="risk-fill" style="width:${d.limitPct}%;background:${d.limitBreached ? "var(--loss)" : d.limitPct > 70 ? "var(--accent)" : "var(--profit)"};"></div></div>
       <div class="mono" style="font-size:10.5px;color:var(--text-faint);margin-top:5px;">${fmtMoney(Math.min(0, d.todayPnl))} of -$${d.limitNum}</div>
-    </div>` : ""}
-    <div class="card" style="padding:14px;margin-bottom:14px;">
+    </div>` : `<div class="home-risk"></div>`}
+    <div class="home-heat card" style="padding:14px;margin-top:14px;">
       <div class="stat-label" style="margin-bottom:10px;">Last 8 weeks</div>
       ${heatmapHTML(d.weeks, d.maxAbsDay)}
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <span class="stat-label">Recent trades</span>
-      <button class="btn btn-ghost" data-action="goto-trades" style="padding:3px 6px;font-size:11px;color:var(--accent);">see all</button>
+    <div class="home-recent">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;">
+        <span class="stat-label">Recent trades</span>
+        <button class="btn btn-ghost" data-action="goto-trades" style="padding:3px 6px;font-size:11px;color:var(--accent);">see all</button>
+      </div>
+      ${recent.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-faint);font-size:12.5px;">No trades logged yet</div>` : `<div class="recent-grid">${recent.map(tradeCardHTML).join("")}</div>`}
     </div>
-    ${recent.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-faint);font-size:12.5px;">No trades logged yet</div>` : recent.map(tradeCardHTML).join("")}
-  `;
+  </div>`;
 }
 
 function renderTrades(d) {
   const filters = [["all", "All"], ["open", "Open"], ["long", "Long"], ["short", "Short"]];
   return `
-    <div class="search-bar">
-      <span style="width:13px;height:13px;color:#565b6a;display:inline-block;">${ICONS.search}</span>
-      <input id="search-input" placeholder="Search symbol…" value="${esc(state.search)}">
+    <div class="trades-toolbar">
+      <div class="search-bar">
+        <span style="width:13px;height:13px;color:#565b6a;display:inline-block;">${ICONS.search}</span>
+        <input id="search-input" placeholder="Search symbol…" value="${esc(state.search)}">
+      </div>
+      <div style="display:flex;gap:6px;overflow-x:auto;">
+        ${filters.map(([k, label]) => `<div class="chip ${state.filter === k ? "active" : ""}" data-action="filter" data-filter="${k}">${label}</div>`).join("")}
+      </div>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;">
-      ${filters.map(([k, label]) => `<div class="chip ${state.filter === k ? "active" : ""}" data-action="filter" data-filter="${k}">${label}</div>`).join("")}
-    </div>
-    ${d.filteredTrades.length === 0 ? `<div class="card" style="padding:24px;text-align:center;color:var(--text-faint);font-size:12.5px;">No trades match</div>` : d.filteredTrades.map(tradeCardHTML).join("")}
+    ${d.filteredTrades.length === 0 ? `<div class="card" style="padding:24px;text-align:center;color:var(--text-faint);font-size:12.5px;margin-top:12px;">No trades match</div>` : `<div class="trades-grid">${d.filteredTrades.map(tradeCardHTML).join("")}</div>`}
   `;
 }
 
@@ -451,16 +566,12 @@ function renderStats(d) {
   const avgWin = d.wins ? d.closed.filter(t => t.pnl > 0).reduce((s, t) => s + t.pnl, 0) / d.wins : 0;
   const lossCount = d.closed.length - d.wins;
   const avgLoss = lossCount ? d.closed.filter(t => t.pnl < 0).reduce((s, t) => s + t.pnl, 0) / lossCount : 0;
-  return `
-    <div class="card" style="padding:14px;margin-bottom:14px;">
+  return `<div class="stats-screen">
+    <div class="card stats-equity" style="padding:14px;">
       <span class="stat-label">Equity curve</span>
-      <div style="height:160px;margin-top:8px;">${equitySVG(d.equityData)}</div>
+      <div style="height:200px;margin-top:8px;">${equitySVG(d.equityData)}</div>
     </div>
-    <div class="card" style="padding:14px;margin-bottom:14px;">
-      <div class="stat-label" style="margin-bottom:10px;">Daily P&L · last 8 weeks</div>
-      ${heatmapHTML(d.weeks, d.maxAbsDay)}
-    </div>
-    <div class="card" style="padding:14px;">
+    <div class="card stats-breakdown" style="padding:14px;">
       <div class="stat-label" style="margin-bottom:10px;">Breakdown</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div><div class="stat-label">Wins</div><div class="mono pnl-pos" style="font-size:16px;font-weight:700;">${d.wins}</div></div>
@@ -469,11 +580,18 @@ function renderStats(d) {
         <div><div class="stat-label">Avg loss</div><div class="mono pnl-neg" style="font-size:14px;">${fmtMoney(avgLoss)}</div></div>
       </div>
     </div>
-  `;
+    <div class="card stats-heat" style="padding:14px;">
+      <div class="stat-label" style="margin-bottom:10px;">Daily P&L · last 8 weeks</div>
+      ${heatmapHTML(d.weeks, d.maxAbsDay)}
+    </div>
+  </div>`;
 }
 
 function renderSettings() {
-  return `
+  return `<div class="settings-screen">
+    <button id="install-btn" class="btn btn-accent" style="width:100%;display:none;margin-bottom:14px;" onclick="triggerInstall()">
+      <span style="width:14px;height:14px;">${ICONS.plus}</span> Install Ledger to this device
+    </button>
     <div class="card" style="padding:16px;">
       <div class="stat-label" style="margin-bottom:8px;">Daily loss limit</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
@@ -485,7 +603,7 @@ function renderSettings() {
         Data is saved privately to your account and isn't visible to anyone else.
       </div>
     </div>
-  `;
+  </div>`;
 }
 
 function sheetFormHTML(existing) {
@@ -545,18 +663,31 @@ function render() {
   const editingTrade = state.editingId ? state.trades.find((t) => t.id === state.editingId) : null;
 
   root.innerHTML = `
-    <div class="topbar" id="topbar">${renderTopbar(d)}</div>
-    <div class="screen" id="screen">${screens[state.tab](d)}</div>
-    ${showFab ? `<button class="fab" data-action="open-add">${ICONS.plus}</button>` : ""}
-    <div class="bottomnav">
-      ${navItems.map(([k, label, icon]) => `<button class="nav-item ${state.tab === k ? "active" : ""}" data-action="tab" data-tab="${k}">${icon}${label}</button>`).join("")}
+    <div class="app-shell">
+      <div class="bottomnav">
+        <div class="sidebar-header">
+          <div class="display" style="font-size:18px;font-weight:700;">Ledger</div>
+          <div class="mono" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Trading journal</div>
+        </div>
+        <button class="btn btn-accent sidebar-add-btn" data-action="open-add">
+          <span style="width:14px;height:14px;">${ICONS.plus}</span> Add trade
+        </button>
+        ${navItems.map(([k, label, icon]) => `<button class="nav-item ${state.tab === k ? "active" : ""}" data-action="tab" data-tab="${k}">${icon}${label}</button>`).join("")}
+      </div>
+      <div class="app-main">
+        <div class="topbar" id="topbar">${renderTopbar(d)}</div>
+        <div class="screen" id="screen">${screens[state.tab](d)}</div>
+      </div>
     </div>
+    ${showFab ? `<button class="fab" data-action="open-add">${ICONS.plus}</button>` : ""}
     <div class="sheet-backdrop ${state.sheetOpen ? "open" : ""}" data-action="close-sheet"></div>
     <div class="sheet ${state.sheetOpen ? "open" : ""}">
       <div class="sheet-handle"></div>
       <div class="sheet-body">${sheetFormHTML(editingTrade)}</div>
     </div>
   `;
+  const installBtn = document.getElementById("install-btn");
+  if (installBtn && deferredInstallPrompt) installBtn.style.display = "inline-flex";
   attachEvents();
 }
 
@@ -648,6 +779,31 @@ function attachEvents() {
       persistTrades(next);
     });
   }
+}
+
+/* ---------- PWA install prompt ---------- */
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById("install-btn");
+  if (btn) btn.style.display = "inline-flex";
+});
+function triggerInstall() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.finally(() => {
+    deferredInstallPrompt = null;
+    const btn = document.getElementById("install-btn");
+    if (btn) btn.style.display = "none";
+  });
+}
+window.triggerInstall = triggerInstall;
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
 }
 
 /* ---------- boot ---------- */

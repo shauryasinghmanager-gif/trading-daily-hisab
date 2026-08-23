@@ -318,7 +318,13 @@ const ICONS = {
 
 /* ---------- helpers ---------- */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => toLocalISO(new Date());
+function toLocalISO(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 const fmtMoney = (n) => {
   const v = Number(n) || 0;
   const sign = v < 0 ? "-" : v > 0 ? "+" : "";
@@ -328,7 +334,16 @@ const pnlClass = (n) => (n > 0 ? "pnl-pos" : n < 0 ? "pnl-neg" : "pnl-zero");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function computePnl(t) {
-  return Number(t.pnl) || 0;
+  // New simplified format
+  if (typeof t.pnl === "number") return t.pnl;
+  if (t.pnl !== undefined && t.pnl !== null && t.pnl !== "") return Number(t.pnl) || 0;
+  // Backward compatibility: entries saved under the old entry/exit/qty form
+  if (t.entryPrice !== undefined && t.exitPrice !== undefined && t.exitPrice !== null && t.exitPrice !== "") {
+    const entry = Number(t.entryPrice), exit = Number(t.exitPrice), qty = Number(t.qty) || 0, fees = Number(t.fees) || 0;
+    const gross = t.side === "short" ? (entry - exit) * qty : (exit - entry) * qty;
+    return gross - fees;
+  }
+  return 0;
 }
 
 /* ---------- state ---------- */
@@ -409,7 +424,7 @@ function getDerived() {
   const days = []; const base = new Date(); base.setHours(0, 0, 0, 0);
   for (let i = 55; i >= 0; i--) {
     const d = new Date(base); d.setDate(d.getDate() - i);
-    const iso = d.toISOString().slice(0, 10);
+    const iso = toLocalISO(d);
     days.push({ iso, val: dailyMap[iso] || 0, weekday: d.getDay() });
   }
   const padded = Array(days[0].weekday).fill(null).concat(days);
@@ -422,7 +437,7 @@ function getDerived() {
   if (state.filter === "loss") filteredTrades = filteredTrades.filter((t) => t.pnl < 0);
   if (state.search.trim()) {
     const q = state.search.trim().toUpperCase();
-    filteredTrades = filteredTrades.filter((t) => (t.note || "").toUpperCase().includes(q));
+    filteredTrades = filteredTrades.filter((t) => (t.note || t.notes || "").toUpperCase().includes(q));
   }
 
   return { enriched, dailyMap, today, todayPnl, totalPnl, wins, winRate, limitNum, limitPct, limitBreached, equityData, weeks, maxAbsDay, filteredTrades };
@@ -480,7 +495,7 @@ function tradeCardHTML(t) {
     </div>
     <div style="flex:1;min-width:0;">
       <div class="mono" style="font-size:13px;color:var(--text-dim);">${t.date}</div>
-      ${t.note ? `<div style="font-size:12px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.note)}</div>` : ""}
+      ${(t.note || t.notes) ? `<div style="font-size:12px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.note || t.notes)}</div>` : ""}
     </div>
     <div style="text-align:right;flex-shrink:0;">
       <div class="mono ${pnlClass(t.pnl || 0)}" style="font-weight:700;font-size:14.5px;">${fmtMoney(t.pnl)}</div>
@@ -614,8 +629,9 @@ function renderSettings() {
 
 function sheetFormHTML(existing) {
   const t = existing || { type: "profit", amount: "", date: todayISO(), note: "" };
-  const type = existing ? (Number(existing.pnl) < 0 ? "loss" : "profit") : "profit";
-  const amount = existing ? Math.abs(Number(existing.pnl)).toString() : "";
+  const existingPnl = existing ? computePnl(existing) : 0;
+  const type = existing ? (existingPnl < 0 ? "loss" : "profit") : "profit";
+  const amount = existing ? Math.abs(existingPnl).toString() : "";
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 14px;">
       <span class="display" style="font-size:16px;font-weight:700;">${existing ? "Edit Entry" : "Log P&L"}</span>
@@ -643,7 +659,7 @@ function sheetFormHTML(existing) {
       </div>
       <div style="margin-bottom:18px;">
         <label class="field-label">Note <span style="opacity:0.6;">(optional)</span></label>
-        <input id="f-note" class="field-input" placeholder="e.g. NIFTY scalps, revenge trade…" value="${esc(t.note || "")}">
+        <input id="f-note" class="field-input" placeholder="e.g. NIFTY scalps, revenge trade…" value="${esc(t.note || t.notes || '')}">
       </div>
       <button type="submit" class="btn btn-accent" style="width:100%;">
         <span style="width:14px;height:14px;">${ICONS.plus}</span> ${existing ? "Save changes" : "Add entry"}
@@ -673,7 +689,7 @@ function render() {
           <div class="mono" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Trading journal</div>
         </div>
         <button class="btn btn-accent sidebar-add-btn" data-action="open-add">
-          <span style="width:14px;height:14px;">${ICONS.plus}</span> Add trade
+          <span style="width:14px;height:14px;">${ICONS.plus}</span> Add entry
         </button>
         ${navItems.map(([k, label, icon]) => `<button class="nav-item ${state.tab === k ? "active" : ""}" data-action="tab" data-tab="${k}">${icon}${label}</button>`).join("")}
       </div>
@@ -692,6 +708,10 @@ function render() {
   const installBtn = document.getElementById("install-btn");
   if (installBtn && deferredInstallPrompt) installBtn.style.display = "inline-flex";
   attachEvents();
+  if (state.sheetOpen) {
+    const amountInput = document.getElementById("f-amount");
+    if (amountInput) setTimeout(() => amountInput.focus(), 260);
+  }
 }
 
 /* ---------- events ---------- */

@@ -328,10 +328,7 @@ const pnlClass = (n) => (n > 0 ? "pnl-pos" : n < 0 ? "pnl-neg" : "pnl-zero");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function computePnl(t) {
-  if (t.exitPrice === null || t.exitPrice === undefined || t.exitPrice === "") return null;
-  const entry = Number(t.entryPrice), exit = Number(t.exitPrice), qty = Number(t.qty), fees = Number(t.fees) || 0;
-  const gross = t.side === "long" ? (exit - entry) * qty : (entry - exit) * qty;
-  return gross - fees;
+  return Number(t.pnl) || 0;
 }
 
 /* ---------- state ---------- */
@@ -342,7 +339,6 @@ const state = {
   tab: "home",
   sheetOpen: false,
   editingId: null,
-  closingId: null,
   search: "",
   filter: "all",
   saveError: false,
@@ -380,22 +376,20 @@ async function persistSettings(limit) {
 /* ---------- derived data ---------- */
 function getDerived() {
   const enriched = state.trades.map((t) => ({ ...t, pnl: computePnl(t) }));
-  const closed = enriched.filter((t) => t.pnl !== null);
-  const open = enriched.filter((t) => t.pnl === null);
   const dailyMap = {};
-  closed.forEach((t) => { dailyMap[t.date] = (dailyMap[t.date] || 0) + t.pnl; });
+  enriched.forEach((t) => { dailyMap[t.date] = (dailyMap[t.date] || 0) + t.pnl; });
   const today = todayISO();
   const todayPnl = dailyMap[today] || 0;
-  const totalPnl = closed.reduce((s, t) => s + t.pnl, 0);
-  const wins = closed.filter((t) => t.pnl > 0).length;
-  const winRate = closed.length ? (wins / closed.length) * 100 : 0;
+  const totalPnl = enriched.reduce((s, t) => s + t.pnl, 0);
+  const wins = enriched.filter((t) => t.pnl > 0).length;
+  const winRate = enriched.length ? (wins / enriched.length) * 100 : 0;
   const limitNum = Number(state.dailyLimit) || 0;
   const limitPct = limitNum > 0 ? Math.min(100, (Math.abs(Math.min(0, todayPnl)) / limitNum) * 100) : 0;
   const limitBreached = limitNum > 0 && todayPnl <= -limitNum;
 
-  const sortedClosed = [...closed].sort((a, b) => (a.date + a.id > b.date + b.id ? 1 : -1));
+  const sortedEntries = [...enriched].sort((a, b) => (a.date + a.id > b.date + b.id ? 1 : -1));
   let cum = 0;
-  const equityData = sortedClosed.map((t) => { cum += t.pnl; return { date: t.date, symbol: t.symbol, equity: cum }; });
+  const equityData = sortedEntries.map((t) => { cum += t.pnl; return { date: t.date, equity: cum }; });
 
   const days = []; const base = new Date(); base.setHours(0, 0, 0, 0);
   for (let i = 55; i >= 0; i--) {
@@ -409,15 +403,14 @@ function getDerived() {
   const maxAbsDay = Math.max(1, ...padded.filter(Boolean).map((d) => Math.abs(d.val)));
 
   let filteredTrades = [...enriched].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  if (state.filter === "open") filteredTrades = filteredTrades.filter((t) => t.pnl === null);
-  if (state.filter === "long") filteredTrades = filteredTrades.filter((t) => t.side === "long");
-  if (state.filter === "short") filteredTrades = filteredTrades.filter((t) => t.side === "short");
+  if (state.filter === "profit") filteredTrades = filteredTrades.filter((t) => t.pnl > 0);
+  if (state.filter === "loss") filteredTrades = filteredTrades.filter((t) => t.pnl < 0);
   if (state.search.trim()) {
     const q = state.search.trim().toUpperCase();
-    filteredTrades = filteredTrades.filter((t) => t.symbol.toUpperCase().includes(q));
+    filteredTrades = filteredTrades.filter((t) => (t.note || "").toUpperCase().includes(q));
   }
 
-  return { enriched, closed, open, dailyMap, today, todayPnl, totalPnl, wins, winRate, limitNum, limitPct, limitBreached, equityData, weeks, maxAbsDay, filteredTrades };
+  return { enriched, dailyMap, today, todayPnl, totalPnl, wins, winRate, limitNum, limitPct, limitBreached, equityData, weeks, maxAbsDay, filteredTrades };
 }
 
 /* ---------- render pieces ---------- */
@@ -436,7 +429,7 @@ function heatmapHTML(weeks, maxAbsDay) {
 
 function equitySVG(equityData) {
   if (equityData.length < 2) {
-    return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:12px;">Log 2+ closed trades to see this</div>`;
+    return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:12px;">Log 2+ entries to see this</div>`;
   }
   const w = 340, h = 150, pad = 10;
   const values = equityData.map((d) => d.equity);
@@ -463,32 +456,20 @@ function equitySVG(equityData) {
 }
 
 function tradeCardHTML(t) {
-  const arrow = t.side === "long" ? ICONS.up : ICONS.down;
-  const bg = t.side === "long" ? "var(--profit-soft)" : "var(--loss-soft)";
-  const iconColor = t.side === "long" ? "var(--profit)" : "var(--loss)";
-  const isClosing = state.closingId === t.id;
+  const arrow = t.pnl >= 0 ? ICONS.up : ICONS.down;
+  const bg = t.pnl >= 0 ? "var(--profit-soft)" : "var(--loss-soft)";
+  const iconColor = t.pnl >= 0 ? "var(--profit)" : "var(--loss)";
   return `<div class="card trade-card">
     <div style="width:34px;height:34px;border-radius:10px;flex-shrink:0;background:${bg};display:flex;align-items:center;justify-content:center;color:${iconColor};">
       <span style="width:16px;height:16px;display:inline-block;">${arrow}</span>
     </div>
     <div style="flex:1;min-width:0;">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span class="mono" style="font-weight:600;font-size:14px;">${esc(t.symbol)}</span>
-        <span class="mono" style="font-size:11px;color:var(--text-faint);">${esc(t.qty)} sh</span>
-      </div>
-      <div class="mono" style="font-size:11px;color:var(--text-faint);margin-top:1px;">
-        ${t.date} · ${Number(t.entryPrice).toFixed(2)} → ${t.exitPrice === null ? "open" : Number(t.exitPrice).toFixed(2)}
-      </div>
-      ${isClosing ? `<div style="display:flex;gap:6px;margin-top:6px;">
-        <input id="close-input-${t.id}" type="number" step="any" placeholder="exit price" class="field-input" style="padding:6px 8px;font-size:12px;">
-        <button class="btn btn-ghost" data-action="confirm-close" data-id="${t.id}" style="color:var(--profit);">${ICONS.check}</button>
-        <button class="btn btn-ghost" data-action="cancel-close" style="color:var(--text-faint);">${ICONS.x}</button>
-      </div>` : ""}
+      <div class="mono" style="font-size:13px;color:var(--text-dim);">${t.date}</div>
+      ${t.note ? `<div style="font-size:12px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.note)}</div>` : ""}
     </div>
     <div style="text-align:right;flex-shrink:0;">
-      <div class="mono ${pnlClass(t.pnl || 0)}" style="font-weight:700;font-size:13.5px;">${t.pnl === null ? "—" : fmtMoney(t.pnl)}</div>
+      <div class="mono ${pnlClass(t.pnl || 0)}" style="font-weight:700;font-size:14.5px;">${fmtMoney(t.pnl)}</div>
       <div style="display:flex;gap:2px;margin-top:4px;justify-content:flex-end;">
-        ${t.exitPrice === null && !isClosing ? `<button class="btn btn-ghost" data-action="start-close" data-id="${t.id}" style="padding:3px 6px;font-size:10.5px;">close</button>` : ""}
         <button class="btn btn-ghost" data-action="edit" data-id="${t.id}" style="color:var(--text-faint);">${ICONS.pencil}</button>
         <button class="btn btn-ghost" data-action="delete" data-id="${t.id}" style="color:var(--text-faint);">${ICONS.trash}</button>
       </div>
@@ -519,9 +500,8 @@ function renderHome(d) {
       <div class="stat-label">Total P&L</div>
       <div class="mono ${pnlClass(d.totalPnl)}" style="font-size:32px;font-weight:700;margin-top:4px;letter-spacing:-0.01em;">${fmtMoney(d.totalPnl)}</div>
       <div style="display:flex;gap:18px;margin-top:14px;">
-        <div><div class="stat-label">% Win rate</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.closed.length ? d.winRate.toFixed(1) + "%" : "—"}</div></div>
-        <div><div class="stat-label">Trades</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.closed.length}</div></div>
-        <div><div class="stat-label">Open</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.open.length}</div></div>
+        <div><div class="stat-label">% Win rate</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.enriched.length ? d.winRate.toFixed(1) + "%" : "—"}</div></div>
+        <div><div class="stat-label">Entries</div><div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${d.enriched.length}</div></div>
       </div>
     </div>
     ${d.limitNum > 0 ? `<div class="card home-risk" style="padding:12px 14px;">
@@ -538,34 +518,34 @@ function renderHome(d) {
     </div>
     <div class="home-recent">
       <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;">
-        <span class="stat-label">Recent trades</span>
+        <span class="stat-label">Recent entries</span>
         <button class="btn btn-ghost" data-action="goto-trades" style="padding:3px 6px;font-size:11px;color:var(--accent);">see all</button>
       </div>
-      ${recent.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-faint);font-size:12.5px;">No trades logged yet</div>` : `<div class="recent-grid">${recent.map(tradeCardHTML).join("")}</div>`}
+      ${recent.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-faint);font-size:12.5px;">No entries logged yet</div>` : `<div class="recent-grid">${recent.map(tradeCardHTML).join("")}</div>`}
     </div>
   </div>`;
 }
 
 function renderTrades(d) {
-  const filters = [["all", "All"], ["open", "Open"], ["long", "Long"], ["short", "Short"]];
+  const filters = [["all", "All"], ["profit", "Profit"], ["loss", "Loss"]];
   return `
     <div class="trades-toolbar">
       <div class="search-bar">
         <span style="width:13px;height:13px;color:#565b6a;display:inline-block;">${ICONS.search}</span>
-        <input id="search-input" placeholder="Search symbol…" value="${esc(state.search)}">
+        <input id="search-input" placeholder="Search notes…" value="${esc(state.search)}">
       </div>
       <div style="display:flex;gap:6px;overflow-x:auto;">
         ${filters.map(([k, label]) => `<div class="chip ${state.filter === k ? "active" : ""}" data-action="filter" data-filter="${k}">${label}</div>`).join("")}
       </div>
     </div>
-    ${d.filteredTrades.length === 0 ? `<div class="card" style="padding:24px;text-align:center;color:var(--text-faint);font-size:12.5px;margin-top:12px;">No trades match</div>` : `<div class="trades-grid">${d.filteredTrades.map(tradeCardHTML).join("")}</div>`}
+    ${d.filteredTrades.length === 0 ? `<div class="card" style="padding:24px;text-align:center;color:var(--text-faint);font-size:12.5px;margin-top:12px;">No entries match</div>` : `<div class="trades-grid">${d.filteredTrades.map(tradeCardHTML).join("")}</div>`}
   `;
 }
 
 function renderStats(d) {
-  const avgWin = d.wins ? d.closed.filter(t => t.pnl > 0).reduce((s, t) => s + t.pnl, 0) / d.wins : 0;
-  const lossCount = d.closed.length - d.wins;
-  const avgLoss = lossCount ? d.closed.filter(t => t.pnl < 0).reduce((s, t) => s + t.pnl, 0) / lossCount : 0;
+  const avgWin = d.wins ? d.enriched.filter(t => t.pnl > 0).reduce((s, t) => s + t.pnl, 0) / d.wins : 0;
+  const lossCount = d.enriched.length - d.wins;
+  const avgLoss = lossCount ? d.enriched.filter(t => t.pnl < 0).reduce((s, t) => s + t.pnl, 0) / lossCount : 0;
   return `<div class="stats-screen">
     <div class="card stats-equity" style="padding:14px;">
       <span class="stat-label">Equity curve</span>
@@ -574,9 +554,9 @@ function renderStats(d) {
     <div class="card stats-breakdown" style="padding:14px;">
       <div class="stat-label" style="margin-bottom:10px;">Breakdown</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div><div class="stat-label">Wins</div><div class="mono pnl-pos" style="font-size:16px;font-weight:700;">${d.wins}</div></div>
-        <div><div class="stat-label">Losses</div><div class="mono pnl-neg" style="font-size:16px;font-weight:700;">${lossCount}</div></div>
-        <div><div class="stat-label">Avg win</div><div class="mono pnl-pos" style="font-size:14px;">${fmtMoney(avgWin)}</div></div>
+        <div><div class="stat-label">Profit days</div><div class="mono pnl-pos" style="font-size:16px;font-weight:700;">${d.wins}</div></div>
+        <div><div class="stat-label">Loss days</div><div class="mono pnl-neg" style="font-size:16px;font-weight:700;">${lossCount}</div></div>
+        <div><div class="stat-label">Avg profit</div><div class="mono pnl-pos" style="font-size:14px;">${fmtMoney(avgWin)}</div></div>
         <div><div class="stat-label">Avg loss</div><div class="mono pnl-neg" style="font-size:14px;">${fmtMoney(avgLoss)}</div></div>
       </div>
     </div>
@@ -607,43 +587,40 @@ function renderSettings() {
 }
 
 function sheetFormHTML(existing) {
-  const t = existing || { symbol: "", side: "long", qty: "", entryPrice: "", exitPrice: "", fees: "", date: todayISO(), notes: "" };
+  const t = existing || { type: "profit", amount: "", date: todayISO(), note: "" };
+  const type = existing ? (Number(existing.pnl) < 0 ? "loss" : "profit") : "profit";
+  const amount = existing ? Math.abs(Number(existing.pnl)).toString() : "";
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 14px;">
-      <span class="display" style="font-size:16px;font-weight:700;">${existing ? "Edit Trade" : "Log a Trade"}</span>
+      <span class="display" style="font-size:16px;font-weight:700;">${existing ? "Edit Entry" : "Log P&L"}</span>
       <button class="btn btn-ghost" data-action="close-sheet" style="color:var(--text-faint);">${ICONS.x}</button>
     </div>
     <form id="trade-form">
-      <div style="margin-bottom:10px;">
-        <label class="field-label">Symbol</label>
-        <input id="f-symbol" class="field-input" style="text-transform:uppercase;" placeholder="AAPL" value="${esc(t.symbol)}" required>
-      </div>
-      <div style="margin-bottom:10px;">
-        <label class="field-label">Side</label>
+      <div style="margin-bottom:14px;">
+        <label class="field-label">Result</label>
         <div style="display:flex;gap:6px;background:var(--bg);padding:3px;border-radius:9px;border:1px solid var(--border);">
-          <div class="seg-btn seg-long ${t.side === "long" ? "active" : ""}" data-action="set-side" data-side="long" id="seg-long">LONG</div>
-          <div class="seg-btn seg-short ${t.side === "short" ? "active" : ""}" data-action="set-side" data-side="short" id="seg-short">SHORT</div>
+          <div class="seg-btn seg-long ${type === "profit" ? "active" : ""}" data-action="set-side" data-side="profit" id="seg-long">PROFIT</div>
+          <div class="seg-btn seg-short ${type === "loss" ? "active" : ""}" data-action="set-side" data-side="loss" id="seg-short">LOSS</div>
         </div>
-        <input type="hidden" id="f-side" value="${t.side}">
+        <input type="hidden" id="f-side" value="${type}">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-        <div><label class="field-label">Qty</label><input id="f-qty" class="field-input" type="number" step="any" min="0" placeholder="100" value="${esc(t.qty)}" required></div>
-        <div><label class="field-label">Date</label><input id="f-date" class="field-input" type="date" value="${esc(t.date)}"></div>
+      <div style="margin-bottom:14px;">
+        <label class="field-label">Amount</label>
+        <div style="position:relative;">
+          <span class="mono" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:14px;">$</span>
+          <input id="f-amount" class="field-input" style="padding-left:26px;font-size:18px;font-weight:600;" type="number" step="any" min="0" placeholder="0.00" value="${esc(amount)}" required autofocus>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-        <div><label class="field-label">Entry price</label><input id="f-entry" class="field-input" type="number" step="any" min="0" placeholder="0.00" value="${esc(t.entryPrice)}" required></div>
-        <div><label class="field-label">Exit price <span style="opacity:0.6;">(optional)</span></label><input id="f-exit" class="field-input" type="number" step="any" min="0" placeholder="open" value="${t.exitPrice === null ? "" : esc(t.exitPrice)}"></div>
+      <div style="margin-bottom:14px;">
+        <label class="field-label">Date</label>
+        <input id="f-date" class="field-input" type="date" value="${esc(t.date)}">
       </div>
-      <div style="margin-bottom:10px;">
-        <label class="field-label">Fees <span style="opacity:0.6;">(optional)</span></label>
-        <input id="f-fees" class="field-input" type="number" step="any" min="0" placeholder="0.00" value="${esc(t.fees)}">
-      </div>
-      <div style="margin-bottom:16px;">
-        <label class="field-label">Notes</label>
-        <input id="f-notes" class="field-input" placeholder="setup, mistake, reason…" value="${esc(t.notes)}">
+      <div style="margin-bottom:18px;">
+        <label class="field-label">Note <span style="opacity:0.6;">(optional)</span></label>
+        <input id="f-note" class="field-input" placeholder="e.g. NIFTY scalps, revenge trade…" value="${esc(t.note || "")}">
       </div>
       <button type="submit" class="btn btn-accent" style="width:100%;">
-        <span style="width:14px;height:14px;">${ICONS.plus}</span> ${existing ? "Save changes" : "Add trade"}
+        <span style="width:14px;height:14px;">${ICONS.plus}</span> ${existing ? "Save changes" : "Add entry"}
       </button>
     </form>
   `;
@@ -707,23 +684,12 @@ function attachEvents() {
           persistTrades(state.trades.filter((t) => t.id !== id));
           break;
         }
-        case "start-close": state.closingId = el.getAttribute("data-id"); render(); break;
-        case "cancel-close": state.closingId = null; render(); break;
-        case "confirm-close": {
-          const id = el.getAttribute("data-id");
-          const input = document.getElementById("close-input-" + id);
-          const val = input ? input.value : "";
-          if (!val) return;
-          persistTrades(state.trades.map((t) => (t.id === id ? { ...t, exitPrice: val } : t)));
-          state.closingId = null;
-          break;
-        }
         case "filter": state.filter = el.getAttribute("data-filter"); render(); break;
         case "set-side": {
           const side = el.getAttribute("data-side");
           document.getElementById("f-side").value = side;
-          document.getElementById("seg-long").classList.toggle("active", side === "long");
-          document.getElementById("seg-short").classList.toggle("active", side === "short");
+          document.getElementById("seg-long").classList.toggle("active", side === "profit");
+          document.getElementById("seg-short").classList.toggle("active", side === "loss");
           break;
         }
       }
@@ -756,20 +722,15 @@ function attachEvents() {
   if (form) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      const symbol = document.getElementById("f-symbol").value.trim();
-      const qty = document.getElementById("f-qty").value;
-      const entryPrice = document.getElementById("f-entry").value;
-      if (!symbol || !qty || !entryPrice) return;
-      const exitVal = document.getElementById("f-exit").value;
+      const amountRaw = document.getElementById("f-amount").value;
+      if (!amountRaw) return;
+      const side = document.getElementById("f-side").value;
+      const amount = Math.abs(Number(amountRaw));
       const record = {
         id: state.editingId || uid(),
-        symbol: symbol.toUpperCase(),
-        side: document.getElementById("f-side").value,
-        qty, entryPrice,
-        exitPrice: exitVal === "" ? null : exitVal,
-        fees: document.getElementById("f-fees").value || 0,
+        pnl: side === "loss" ? -amount : amount,
         date: document.getElementById("f-date").value || todayISO(),
-        notes: document.getElementById("f-notes").value || "",
+        note: document.getElementById("f-note").value || "",
       };
       const next = state.editingId
         ? state.trades.map((t) => (t.id === state.editingId ? record : t))

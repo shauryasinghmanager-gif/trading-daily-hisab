@@ -51,6 +51,14 @@ body {
 .pnl-neg { color: var(--loss); }
 .pnl-zero { color: var(--text-dim); }
 
+/* Icon sizing: inline <svg> icons have no width/height attributes (only viewBox),
+   so without CSS they fall back to the UA default of 300x150 and blow out any
+   button/badge they sit in. This gives every icon a sane default, and .icon
+   wrappers fill whatever explicit box they're given. */
+svg:not([width]) { width: 1em; height: 1em; }
+.icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.icon svg { width: 100%; height: 100%; display: block; }
+
 #app-root {
   background: var(--bg);
   height: 700px;
@@ -69,6 +77,11 @@ body {
 .app-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .sidebar-header { display: none; }
 .sidebar-add-btn { display: none; }
+
+/* Base stacked layout for Home/Stats screens — gives every card a real gap
+   from its neighbor so shadows don't bleed into the card below. Overridden
+   by the grid layout in the desktop media query further down. */
+.home-screen, .stats-screen { display: flex; flex-direction: column; gap: 14px; }
 
 /* Full-screen, edge-to-edge on phones and when installed as an app */
 @media (max-width: 859px), (display-mode: standalone), (display-mode: fullscreen) {
@@ -387,18 +400,21 @@ const pnlClass = (n) => (n > 0 ? "pnl-pos" : n < 0 ? "pnl-neg" : "pnl-zero");
 /* Tasteful count-up: numbers settle into place rather than snapping, gives the ledger a pulse. */
 let prevTotalShown = 0;
 let prevTodayShown = 0;
-function animateCountUp(el, from, to, duration) {
+let totalCountUpFrame = null;
+let todayCountUpFrame = null;
+function animateCountUp(el, from, to, duration, frameRef) {
   if (!el) return;
+  if (frameRef.id) cancelAnimationFrame(frameRef.id);
   if (Math.abs(from - to) < 0.005) { el.textContent = fmtMoney(to); return; }
   const start = performance.now();
   function tick(now) {
     const t = Math.min(1, (now - start) / duration);
     const eased = 1 - Math.pow(1 - t, 3);
     el.textContent = fmtMoney(from + (to - from) * eased);
-    if (t < 1) requestAnimationFrame(tick);
-    else el.textContent = fmtMoney(to);
+    if (t < 1) frameRef.id = requestAnimationFrame(tick);
+    else { el.textContent = fmtMoney(to); frameRef.id = null; }
   }
-  requestAnimationFrame(tick);
+  frameRef.id = requestAnimationFrame(tick);
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -469,7 +485,10 @@ async function persistTrades(next) {
 }
 async function persistSettings(limit) {
   state.dailyLimit = limit;
-  try { localStorage.setItem("journal_html:settings", JSON.stringify({ dailyLimit: limit })); } catch (e) {}
+  try {
+    localStorage.setItem("journal_html:settings", JSON.stringify({ dailyLimit: limit }));
+    state.saveError = false;
+  } catch (e) { state.saveError = true; }
 }
 
 /* ---------- derived data ---------- */
@@ -486,7 +505,10 @@ function getDerived() {
   const limitPct = limitNum > 0 ? Math.min(100, (Math.abs(Math.min(0, todayPnl)) / limitNum) * 100) : 0;
   const limitBreached = limitNum > 0 && todayPnl <= -limitNum;
 
-  const sortedEntries = [...enriched].sort((a, b) => (a.date + a.id > b.date + b.id ? 1 : -1));
+  // Stable date-only sort for the equity curve — same-day entries keep the order
+  // they were stored in (array position), instead of being reshuffled by a
+  // string comparison against their random ids.
+  const sortedEntries = [...enriched].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   let cum = 0;
   const equityData = sortedEntries.map((t) => { cum += t.pnl; return { date: t.date, equity: cum }; });
 
@@ -524,7 +546,7 @@ function heatmapHTML(weeks, maxAbsDay) {
         if (!d) return `<div style="width:11px;height:11px;"></div>`;
         const intensity = d.val === 0 ? 0 : Math.max(0.2, Math.abs(d.val) / maxAbsDay);
         const color = d.val > 0 ? "var(--profit)" : d.val < 0 ? "var(--loss)" : "var(--bg-elev)";
-        const opacity = d.val === 0 ? 1 : intensity + 0.25;
+        const opacity = d.val === 0 ? 1 : Math.min(1, intensity + 0.25);
         const isToday = d.iso === todayISO();
         const ring = isToday ? "box-shadow:0 0 0 1.5px var(--accent);" : "";
         return `<div class="heat-cell" title="${d.iso}: ${fmtMoney(d.val)}" style="background:${color};opacity:${opacity};${ring}"></div>`;
@@ -550,7 +572,7 @@ function equitySVG(equityData) {
   const zeroY = pad + (h - pad * 2) * (1 - (0 - min) / range);
   const line = pts.map((p) => p.join(",")).join(" ");
   const areaPts = `${pad},${zeroY} ` + line + ` ${pad + (equityData.length - 1) * stepX},${zeroY}`;
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:100%;">
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="width:100%;height:100%;">
     <defs><linearGradient id="eqgrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#c9a15a" stop-opacity="0.35"/>
       <stop offset="100%" stop-color="#c9a15a" stop-opacity="0"/>
@@ -567,7 +589,7 @@ function tradeCardHTML(t) {
   const iconColor = t.pnl >= 0 ? "var(--profit)" : "var(--loss)";
   return `<div class="card trade-card">
     <div style="width:34px;height:34px;border-radius:10px;flex-shrink:0;background:${bg};display:flex;align-items:center;justify-content:center;color:${iconColor};">
-      <span style="width:16px;height:16px;display:inline-block;">${arrow}</span>
+      <span class="icon" style="width:16px;height:16px;">${arrow}</span>
     </div>
     <div style="flex:1;min-width:0;">
       <div class="mono" style="font-size:13px;color:var(--text-dim);">${t.date}</div>
@@ -576,8 +598,8 @@ function tradeCardHTML(t) {
     <div style="text-align:right;flex-shrink:0;">
       <div class="mono ${pnlClass(t.pnl || 0)}" style="font-weight:700;font-size:14.5px;">${fmtMoney(t.pnl)}</div>
       <div style="display:flex;gap:2px;margin-top:4px;justify-content:flex-end;">
-        <button class="btn btn-ghost" data-action="edit" data-id="${t.id}" style="color:var(--text-faint);">${ICONS.pencil}</button>
-        <button class="btn btn-ghost" data-action="delete" data-id="${t.id}" style="color:var(--text-faint);">${ICONS.trash}</button>
+        <button class="btn btn-ghost" data-action="edit" data-id="${t.id}" style="color:var(--text-faint);" aria-label="Edit entry"><span class="icon" style="width:15px;height:15px;">${ICONS.pencil}</span></button>
+        <button class="btn btn-ghost" data-action="delete" data-id="${t.id}" style="color:var(--text-faint);" aria-label="Delete entry"><span class="icon" style="width:15px;height:15px;">${ICONS.trash}</span></button>
       </div>
     </div>
   </div>`;
@@ -595,8 +617,8 @@ function renderTopbar(d) {
         <div id="today-pnl-el" class="hero-figure ${pnlClass(d.todayPnl)}" style="font-size:17px;">${fmtMoney(d.todayPnl)}</div>
       </div>
     </div>
-    ${state.saveError ? `<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--loss);margin-top:6px;"><span style="width:11px;height:11px;display:inline-block;">${ICONS.alert}</span> couldn't save changes</div>` : ""}
-    ${state.storageBroken ? `<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--accent);margin-top:6px;"><span style="width:11px;height:11px;display:inline-block;">${ICONS.alert}</span> storage blocked here — entries won't survive a refresh in this preview. Download a backup from Settings.</div>` : ""}
+    ${state.saveError ? `<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--loss);margin-top:6px;"><span class="icon" style="width:11px;height:11px;">${ICONS.alert}</span> couldn't save changes</div>` : ""}
+    ${state.storageBroken ? `<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--accent);margin-top:6px;"><span class="icon" style="width:11px;height:11px;">${ICONS.alert}</span> storage blocked here — entries won't survive a refresh in this preview. Download a backup from Settings.</div>` : ""}
   `;
 }
 
@@ -614,21 +636,26 @@ function renderHome(d) {
     ${d.limitNum > 0 ? `<div class="card home-risk" style="padding:12px 14px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span class="stat-label">Daily loss limit</span>
-        ${d.limitBreached ? `<span style="font-size:10.5px;font-weight:700;color:var(--loss);display:flex;align-items:center;gap:3px;"><span style="width:11px;height:11px;">${ICONS.alert}</span> hit</span>` : ""}
+        ${d.limitBreached ? `<span style="font-size:10.5px;font-weight:700;color:var(--loss);display:flex;align-items:center;gap:3px;"><span class="icon" style="width:11px;height:11px;">${ICONS.alert}</span> hit</span>` : ""}
       </div>
       <div class="risk-track"><div class="risk-fill" style="width:${d.limitPct}%;background:${d.limitBreached ? "var(--loss)" : d.limitPct > 70 ? "var(--accent)" : "var(--profit)"};"></div></div>
       <div class="mono" style="font-size:10.5px;color:var(--text-faint);margin-top:5px;">${fmtMoney(Math.min(0, d.todayPnl))} of -$${d.limitNum}</div>
-    </div>` : `<div class="home-risk"></div>`}
-    <div class="home-heat card" style="padding:14px;margin-top:14px;">
+    </div>` : `<div class="card home-risk" style="padding:12px 14px;display:flex;align-items:center;justify-content:center;text-align:center;">
+      <div>
+        <div style="font-size:12px;color:var(--text-dim);">No daily loss limit set</div>
+        <button class="btn btn-ghost" data-action="goto-settings" style="color:var(--accent);font-size:11.5px;margin-top:4px;padding:4px 8px;">Set one in Settings</button>
+      </div>
+    </div>`}
+    <div class="home-heat card" style="padding:14px;">
       <div class="stat-label" style="margin-bottom:10px;">Last 8 weeks</div>
       ${heatmapHTML(d.weeks, d.maxAbsDay)}
     </div>
     <div class="home-recent">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;">
         <span class="stat-label">Recent entries</span>
         <button class="btn btn-ghost" data-action="goto-trades" style="padding:3px 6px;font-size:11px;color:var(--accent);">see all</button>
       </div>
-      ${recent.length === 0 ? `<div class="card" style="padding:28px 20px;text-align:center;"><div style="font-size:13px;color:var(--text-dim);margin-bottom:4px;">The ledger is empty</div><div style="font-size:11.5px;color:var(--text-faint);">Tap + to log today\'s result and start the tally</div></div>` : `<div class="recent-grid">${recent.map(tradeCardHTML).join("")}</div>`}
+      ${recent.length === 0 ? `<div class="card" style="padding:28px 20px;text-align:center;"><div style="font-size:13px;color:var(--text-dim);margin-bottom:4px;">The ledger is empty</div><div style="font-size:11.5px;color:var(--text-faint);">Tap + to log today's result and start the tally</div></div>` : `<div class="recent-grid">${recent.map(tradeCardHTML).join("")}</div>`}
     </div>
   </div>`;
 }
@@ -638,7 +665,7 @@ function renderTrades(d) {
   return `
     <div class="trades-toolbar">
       <div class="search-bar">
-        <span style="width:13px;height:13px;color:#565b6a;display:inline-block;">${ICONS.search}</span>
+        <span class="icon" style="width:13px;height:13px;color:#565b6a;">${ICONS.search}</span>
         <input id="search-input" placeholder="Search notes…" value="${esc(state.search)}">
       </div>
       <div style="display:flex;gap:6px;overflow-x:auto;">
@@ -677,7 +704,7 @@ function renderStats(d) {
 function renderSettings() {
   return `<div class="settings-screen">
     <button id="install-btn" class="btn btn-accent" style="width:100%;display:none;margin-bottom:14px;" onclick="triggerInstall()">
-      <span style="width:14px;height:14px;">${ICONS.plus}</span> Install Ledger to this device
+      <span class="icon" style="width:14px;height:14px;">${ICONS.plus}</span> Install Ledger to this device
     </button>
     <div class="card" style="padding:16px;margin-bottom:14px;">
       <div class="stat-label" style="margin-bottom:8px;">Daily loss limit</div>
@@ -711,7 +738,7 @@ function sheetFormHTML(existing) {
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 14px;">
       <span class="display" style="font-size:16px;font-weight:700;">${existing ? "Edit Entry" : "Log P&L"}</span>
-      <button class="btn btn-ghost" data-action="close-sheet" style="color:var(--text-faint);">${ICONS.x}</button>
+      <button class="btn btn-ghost" data-action="close-sheet" style="color:var(--text-faint);" aria-label="Close"><span class="icon" style="width:16px;height:16px;">${ICONS.x}</span></button>
     </div>
     <form id="trade-form">
       <div style="margin-bottom:14px;">
@@ -731,14 +758,14 @@ function sheetFormHTML(existing) {
       </div>
       <div style="margin-bottom:14px;">
         <label class="field-label">Date</label>
-        <input id="f-date" class="field-input" type="date" value="${esc(t.date)}">
+        <input id="f-date" class="field-input" type="date" value="${esc(t.date)}" max="${esc(todayISO())}">
       </div>
       <div style="margin-bottom:18px;">
         <label class="field-label">Note <span style="opacity:0.6;">(optional)</span></label>
         <input id="f-note" class="field-input" placeholder="e.g. NIFTY scalps, revenge trade…" value="${esc(t.note || t.notes || '')}">
       </div>
       <button type="submit" class="btn btn-accent" style="width:100%;">
-        <span style="width:14px;height:14px;">${ICONS.plus}</span> ${existing ? "Save changes" : "Add entry"}
+        <span class="icon" style="width:14px;height:14px;">${ICONS.plus}</span> ${existing ? "Save changes" : "Add entry"}
       </button>
     </form>
   `;
@@ -765,7 +792,7 @@ function render() {
           <div class="mono" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">Trading journal</div>
         </div>
         <button class="btn btn-accent sidebar-add-btn" data-action="open-add">
-          <span style="width:14px;height:14px;">${ICONS.plus}</span> Add entry
+          <span class="icon" style="width:14px;height:14px;">${ICONS.plus}</span> Add entry
         </button>
         ${navItems.map(([k, label, icon]) => `<button class="nav-item ${state.tab === k ? "active" : ""}" data-action="tab" data-tab="${k}">${icon}${label}</button>`).join("")}
       </div>
@@ -774,7 +801,7 @@ function render() {
         <div class="screen" id="screen">${screens[state.tab](d)}</div>
       </div>
     </div>
-    ${showFab ? `<button class="fab ${state.trades.length === 0 ? "invite" : ""}" data-action="open-add">${ICONS.plus}</button>` : ""}
+    ${showFab ? `<button class="fab ${state.trades.length === 0 ? "invite" : ""}" data-action="open-add" aria-label="Add entry"><span class="icon" style="width:22px;height:22px;">${ICONS.plus}</span></button>` : ""}
     <div class="sheet-backdrop ${state.sheetOpen ? "open" : ""}" data-action="close-sheet"></div>
     <div class="sheet ${state.sheetOpen ? "open" : ""}">
       <div class="sheet-handle"></div>
@@ -784,8 +811,8 @@ function render() {
   const installBtn = document.getElementById("install-btn");
   if (installBtn && deferredInstallPrompt) installBtn.style.display = "inline-flex";
   attachEvents();
-  animateCountUp(document.getElementById("hero-total-el"), prevTotalShown, d.totalPnl, 550);
-  animateCountUp(document.getElementById("today-pnl-el"), prevTodayShown, d.todayPnl, 550);
+  animateCountUp(document.getElementById("hero-total-el"), prevTotalShown, d.totalPnl, 550, { get id() { return totalCountUpFrame; }, set id(v) { totalCountUpFrame = v; } });
+  animateCountUp(document.getElementById("today-pnl-el"), prevTodayShown, d.todayPnl, 550, { get id() { return todayCountUpFrame; }, set id(v) { todayCountUpFrame = v; } });
   prevTotalShown = d.totalPnl;
   prevTodayShown = d.todayPnl;
   if (state.sheetOpen) {
@@ -802,6 +829,7 @@ function attachEvents() {
       switch (action) {
         case "tab": state.tab = el.getAttribute("data-tab"); render(); break;
         case "goto-trades": state.tab = "trades"; render(); break;
+        case "goto-settings": state.tab = "settings"; render(); break;
         case "open-add": state.editingId = null; state.sheetOpen = true; render(); break;
         case "close-sheet": state.sheetOpen = false; state.editingId = null; render(); break;
         case "edit": state.editingId = el.getAttribute("data-id"); state.sheetOpen = true; render(); break;
@@ -874,8 +902,8 @@ function attachEvents() {
           const parsed = JSON.parse(reader.result);
           if (!Array.isArray(parsed.trades)) throw new Error("bad format");
           persistTrades(parsed.trades);
-          if (parsed.dailyLimit) persistSettings(parsed.dailyLimit);
-          if (status) status.textContent = `Restored ${parsed.trades.length} entries from backup.`;
+          if (parsed.dailyLimit !== undefined && parsed.dailyLimit !== null) persistSettings(parsed.dailyLimit);
+          if (status) { status.textContent = `Restored ${parsed.trades.length} entries from backup.`; status.style.color = "var(--text-faint)"; }
         } catch (err) {
           if (status) { status.textContent = "Couldn't read that file — is it a Ledger backup?"; status.style.color = "var(--loss)"; }
         }
@@ -890,7 +918,7 @@ function attachEvents() {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const amountRaw = document.getElementById("f-amount").value;
-      if (!amountRaw) return;
+      if (!amountRaw || isNaN(Number(amountRaw))) return;
       const side = document.getElementById("f-side").value;
       const amount = Math.abs(Number(amountRaw));
       const record = {

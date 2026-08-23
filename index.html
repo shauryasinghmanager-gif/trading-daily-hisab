@@ -183,7 +183,7 @@ body {
 }
 .screen::-webkit-scrollbar { width: 0; }
 .bottomnav {
-  position: absolute;
+  position: fixed;
   left: 0; right: 0; bottom: 0;
   height: 64px;
   background: rgba(23,26,33,0.92);
@@ -206,7 +206,7 @@ body {
 .nav-item.active { color: var(--accent); }
 .nav-item svg { width: 18px; height: 18px; }
 .fab {
-  position: absolute;
+  position: fixed;
   right: 18px;
   bottom: 82px;
   width: 52px; height: 52px;
@@ -270,12 +270,12 @@ body {
 .stat-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 600; }
 
 .sheet-backdrop {
-  position: absolute; inset: 0; background: rgba(0,0,0,0.55);
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
   z-index: 40; opacity: 0; pointer-events: none; transition: opacity 200ms ease;
 }
 .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
 .sheet {
-  position: absolute; left: 0; right: 0; bottom: 0;
+  position: fixed; left: 0; right: 0; bottom: 0;
   background: var(--bg-elev); border-top: 1px solid var(--border);
   border-radius: 20px 20px 0 0;
   max-height: 88%;

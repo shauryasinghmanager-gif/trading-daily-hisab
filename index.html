@@ -342,10 +342,25 @@ const state = {
   search: "",
   filter: "all",
   saveError: false,
+  storageBroken: false,
 };
+
+/* Detect whether localStorage actually persists in this environment
+   (sandboxed iframes / private-mode / storage-blocked browsers can silently
+   no-op or wipe on refresh — better to warn than lose data quietly). */
+function storageWorks() {
+  try {
+    const k = "__ledger_probe__";
+    localStorage.setItem(k, "1");
+    const ok = localStorage.getItem(k) === "1";
+    localStorage.removeItem(k);
+    return ok;
+  } catch (e) { return false; }
+}
 
 /* ---------- storage (localStorage — this app runs standalone, installed to your device) ---------- */
 async function loadData() {
+  state.storageBroken = !storageWorks();
   try {
     const t = localStorage.getItem("journal_html:trades");
     if (t) state.trades = JSON.parse(t);
@@ -490,6 +505,7 @@ function renderTopbar(d) {
       </div>
     </div>
     ${state.saveError ? `<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--loss);margin-top:6px;"><span style="width:11px;height:11px;display:inline-block;">${ICONS.alert}</span> couldn't save changes</div>` : ""}
+    ${state.storageBroken ? `<div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--accent);margin-top:6px;"><span style="width:11px;height:11px;display:inline-block;">${ICONS.alert}</span> storage blocked here — entries won't survive a refresh in this preview. Download a backup from Settings.</div>` : ""}
   `;
 }
 
@@ -572,15 +588,25 @@ function renderSettings() {
     <button id="install-btn" class="btn btn-accent" style="width:100%;display:none;margin-bottom:14px;" onclick="triggerInstall()">
       <span style="width:14px;height:14px;">${ICONS.plus}</span> Install Ledger to this device
     </button>
-    <div class="card" style="padding:16px;">
+    <div class="card" style="padding:16px;margin-bottom:14px;">
       <div class="stat-label" style="margin-bottom:8px;">Daily loss limit</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
         <span class="mono" style="color:var(--text-faint);">$</span>
         <input id="limit-input" class="field-input" type="number" min="0" placeholder="e.g. 500" value="${esc(state.dailyLimit)}">
       </div>
       <div style="font-size:11.5px;color:var(--text-faint);">A soft cap for reference — shown as a progress bar on Home once your loss today gets close.</div>
-      <div style="margin-top:18px;font-size:11px;color:var(--text-faint);border-top:1px solid var(--border-soft);padding-top:14px;">
-        Data is saved privately to your account and isn't visible to anyone else.
+    </div>
+    <div class="card" style="padding:16px;">
+      <div class="stat-label" style="margin-bottom:8px;">Backup &amp; restore</div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:12px;">Your entries live in this browser only. Download a backup regularly, or before clearing browser data / switching devices.</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="export-btn" style="flex:1;">Download backup</button>
+        <button class="btn" id="import-btn" style="flex:1;">Restore backup</button>
+      </div>
+      <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+      <div id="import-status" style="font-size:11px;color:var(--text-faint);margin-top:8px;"></div>
+      <div style="margin-top:16px;font-size:11px;color:var(--text-faint);border-top:1px solid var(--border-soft);padding-top:14px;">
+        Data is saved locally in this browser and isn't sent anywhere.
       </div>
     </div>
   </div>`;
@@ -715,6 +741,47 @@ function attachEvents() {
         const again = document.getElementById("limit-input");
         if (again) { again.value = e.target.value; again.focus(); again.setSelectionRange(cursor, cursor); }
       });
+    });
+  }
+
+  const exportBtn = document.getElementById("export-btn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => {
+      const payload = { trades: state.trades, dailyLimit: state.dailyLimit, exportedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ledger-backup-${todayISO()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  const importBtn = document.getElementById("import-btn");
+  const importFileInput = document.getElementById("import-file-input");
+  if (importBtn && importFileInput) {
+    importBtn.addEventListener("click", () => importFileInput.click());
+    importFileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const status = document.getElementById("import-status");
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (!Array.isArray(parsed.trades)) throw new Error("bad format");
+          persistTrades(parsed.trades);
+          if (parsed.dailyLimit) persistSettings(parsed.dailyLimit);
+          if (status) status.textContent = `Restored ${parsed.trades.length} entries from backup.`;
+        } catch (err) {
+          if (status) { status.textContent = "Couldn't read that file — is it a Ledger backup?"; status.style.color = "var(--loss)"; }
+        }
+      };
+      reader.readAsText(file);
+      importFileInput.value = "";
     });
   }
 

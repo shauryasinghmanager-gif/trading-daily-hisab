@@ -472,6 +472,12 @@ async function loadData() {
       if (parsed.dailyLimit) state.dailyLimit = parsed.dailyLimit;
     }
   } catch (e) {}
+  try {
+    const savedTab = localStorage.getItem("journal_html:tab");
+    if (savedTab && ["home", "trades", "stats", "settings"].includes(savedTab)) {
+      state.tab = savedTab;
+    }
+  } catch (e) {}
   state.loaded = true;
   render();
 }
@@ -821,15 +827,19 @@ function render() {
   }
 }
 
+function saveTab() {
+  try { localStorage.setItem("journal_html:tab", state.tab); } catch (e) {}
+}
+
 /* ---------- events ---------- */
 function attachEvents() {
   document.querySelectorAll("[data-action]").forEach((el) => {
     const action = el.getAttribute("data-action");
     el.addEventListener("click", (e) => {
       switch (action) {
-        case "tab": state.tab = el.getAttribute("data-tab"); render(); break;
-        case "goto-trades": state.tab = "trades"; render(); break;
-        case "goto-settings": state.tab = "settings"; render(); break;
+        case "tab": state.tab = el.getAttribute("data-tab"); saveTab(); render(); break;
+        case "goto-trades": state.tab = "trades"; saveTab(); render(); break;
+        case "goto-settings": state.tab = "settings"; saveTab(); render(); break;
         case "open-add": state.editingId = null; state.sheetOpen = true; render(); break;
         case "close-sheet": state.sheetOpen = false; state.editingId = null; render(); break;
         case "edit": state.editingId = el.getAttribute("data-id"); state.sheetOpen = true; render(); break;

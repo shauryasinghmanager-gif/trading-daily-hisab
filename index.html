@@ -71,10 +71,11 @@ body {
 .sidebar-add-btn { display: none; }
 
 /* Full-screen, edge-to-edge on phones and when installed as an app */
-@media (max-width: 480px), (display-mode: standalone), (display-mode: fullscreen) {
+@media (max-width: 859px), (display-mode: standalone), (display-mode: fullscreen) {
   body { padding: 0; align-items: stretch; }
   #app-root {
     width: 100%;
+    height: 100vh;
     height: 100dvh;
     max-height: none;
     max-width: none;
@@ -82,10 +83,10 @@ body {
     border: none;
     box-shadow: none;
   }
-  .topbar { padding-top: calc(18px + env(safe-area-inset-top)); }
-  .bottomnav { padding-bottom: env(safe-area-inset-bottom); height: calc(64px + env(safe-area-inset-bottom)); }
-  .fab { bottom: calc(82px + env(safe-area-inset-bottom)); }
-  .screen { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+  .topbar { padding-top: calc(18px + env(safe-area-inset-top, 0px)); }
+  .bottomnav { padding-bottom: env(safe-area-inset-bottom, 0px); height: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .fab { bottom: calc(82px + env(safe-area-inset-bottom, 0px)); }
+  .screen { padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* Desktop / large screens: real app shell — left sidebar, wide content, no phone card */
